@@ -42,11 +42,11 @@ function AppContent() {
     }
   }, [currentUser]);
 
-  // Fetch leaderboard for total users count
+  // Get leaderboard data from cache (managed by Leaderboard component)
   const { data: leaderboardData } = useQuery({
     queryKey: ['leaderboard'],
     queryFn: apiService.getLeaderboard,
-    refetchInterval: 5000,
+    enabled: false, // Don't auto-fetch, just read from cache
   });
 
   // Update current user's data from leaderboard data (including enhanced stats)

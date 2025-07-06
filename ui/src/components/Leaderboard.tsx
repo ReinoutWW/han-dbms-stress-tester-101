@@ -21,29 +21,75 @@ export default function Leaderboard() {
   const queryClient = useQueryClient();
   const socket = useSocket();
 
-  // Initial data fetch with fallback polling
-  const { data: leaderboardData, isLoading } = useQuery({
+  // Test API function directly
+  useEffect(() => {
+    console.log('🧪 Testing API service directly...');
+    apiService.getLeaderboard()
+      .then(data => console.log('🧪 Direct API call success:', data))
+      .catch(error => console.error('🧪 Direct API call failed:', error));
+  }, []);
+
+  // Initial data fetch with optimized settings
+  const { data: leaderboardData, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ['leaderboard'],
-    queryFn: apiService.getLeaderboard,
-    // Always fetch initially, then use polling as fallback if Socket.io is not connected
-    refetchInterval: socket.isConnected ? false : 3000,
-    staleTime: socket.isConnected ? 1000 : 0, // Cache for 1 second if Socket.io connected
+    queryFn: () => {
+      console.log('🔍 React Query calling apiService.getLeaderboard...');
+      return apiService.getLeaderboard();
+    },
+    // Stable configuration to prevent constant refetching
+    refetchInterval: socket.isConnected ? false : 10000, // Only poll if socket disconnected, less frequent
+    staleTime: socket.isConnected ? 30000 : 5000, // Keep data fresh longer when socket is connected
+    gcTime: 300000, // Keep in cache for 5 minutes
+    refetchOnWindowFocus: false, // Prevent refetch on tab focus
+    retry: 2, // Limit retries
+    refetchOnMount: true, // Always fetch when component mounts
   });
 
-  // Listen for real-time leaderboard updates via Socket.io
+  // Force fetch on component mount if no data
+  useEffect(() => {
+    console.log('🏆 Leaderboard query state:', {
+      hasData: !!leaderboardData,
+      isLoading,
+      isFetching,
+      isError,
+      error: error?.message || 'No error'
+    });
+    
+    if (!leaderboardData && !isLoading && !isFetching) {
+      console.log('🔄 Force fetching leaderboard data...');
+      refetch().then(result => {
+        console.log('🔄 Refetch result:', result);
+      }).catch(error => {
+        console.error('🔄 Refetch error:', error);
+      });
+    }
+  }, [leaderboardData, isLoading, isFetching, isError, refetch]);
+
+  // Listen for real-time leaderboard updates via Socket.io with debouncing
   useEffect(() => {
     if (!socket.isConnected) return;
 
+    let updateTimeout: NodeJS.Timeout;
+
+    const debouncedUpdate = () => {
+      clearTimeout(updateTimeout);
+      updateTimeout = setTimeout(() => {
+        // Use refetch instead of invalidate to prevent loading state
+        queryClient.refetchQueries({ 
+          queryKey: ['leaderboard'],
+          type: 'active' 
+        });
+      }, 1000); // Debounce updates by 1 second
+    };
+
     const handleLeaderboardUpdate = (data: any) => {
       console.log('📊 Leaderboard update received:', data);
-      // Invalidate and refetch leaderboard data when someone's score changes
-      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      debouncedUpdate();
     };
 
     const handleTestCompleted = (data: any) => {
       console.log('🎉 Test completed:', data);
-      // Invalidate leaderboard when any test completes (scores may have changed)
-      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      debouncedUpdate();
     };
 
     // Set up Socket.io event listeners
@@ -52,6 +98,7 @@ export default function Leaderboard() {
 
     // Cleanup function
     const cleanup = () => {
+      clearTimeout(updateTimeout);
       unsubscribeLeaderboard();
       unsubscribeTestCompleted();
     };
@@ -88,6 +135,11 @@ export default function Leaderboard() {
   };
 
   const getPerformanceColor = (rating: string) => {
+    // Handle edge cases where rating might be undefined, null, or not a string
+    if (!rating || typeof rating !== 'string') {
+      return 'text-slate-600';
+    }
+    
     switch (rating.toLowerCase()) {
       case 'excellent':
         return 'text-performance-excellent';
@@ -97,17 +149,32 @@ export default function Leaderboard() {
         return 'text-performance-average';
       case 'poor':
         return 'text-performance-poor';
+      case 'not rated':
+        return 'text-slate-500';
       default:
         return 'text-slate-600';
     }
   };
 
-  if (isLoading) {
+  // Only show loading on initial load, not on background refetches
+  if (isLoading && !leaderboardData) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-han-500/30 border-t-han-500 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-600">Loading leaderboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (isError && !leaderboardData) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-red-600 mb-2">Failed to load leaderboard</p>
+          <p className="text-slate-600 text-sm">Please check your connection and try again</p>
         </div>
       </div>
     );
@@ -138,14 +205,19 @@ export default function Leaderboard() {
                 Leaderboard
               </h1>
               <p className="text-slate-600">
-                Live rankings updated every 2 seconds
+                {socket.isConnected ? 'Live rankings with real-time updates' : 'Rankings updated every 10 seconds'}
               </p>
             </div>
           </div>
           
           <div className="flex items-center space-x-2 bg-white/60 backdrop-blur-sm border border-white/40 rounded-2xl px-3 py-2">
-            <div className="w-3 h-3 bg-status-online rounded-full animate-status-pulse"></div>
-            <span className="text-sm text-status-online font-medium">LIVE</span>
+            <div className={`w-3 h-3 rounded-full ${socket.isConnected ? 'bg-status-online animate-status-pulse' : 'bg-slate-400'}`}></div>
+            <span className={`text-sm font-medium ${socket.isConnected ? 'text-status-online' : 'text-slate-600'}`}>
+              {socket.isConnected ? 'LIVE' : 'OFFLINE'}
+            </span>
+            {isFetching && (
+              <div className="w-2 h-2 bg-han-500 rounded-full animate-pulse ml-1"></div>
+            )}
           </div>
         </div>
 

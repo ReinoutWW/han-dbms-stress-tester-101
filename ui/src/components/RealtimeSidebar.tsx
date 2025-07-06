@@ -18,17 +18,19 @@ interface RealtimeSidebarProps {
 
 export default function RealtimeSidebar({ className = '' }: RealtimeSidebarProps) {
   // Fetch database status with frequent updates
-  const { data: dbStatus } = useQuery({
+  const { data: dbStatus, isLoading: isDbStatusLoading, error: dbStatusError } = useQuery({
     queryKey: ['database-status'],
     queryFn: apiService.getDatabaseStatus,
     refetchInterval: 1000, // Update every second for real-time feel
+    refetchOnWindowFocus: false, // Prevent refetch on window focus
+    retry: 3, // Retry failed requests up to 3 times
   });
 
-  // Fetch leaderboard for aggregated stats
+  // Get leaderboard data from cache (managed by Leaderboard component)
   const { data: leaderboardData } = useQuery({
     queryKey: ['leaderboard'],
     queryFn: apiService.getLeaderboard,
-    refetchInterval: 2000, // Update every 2 seconds
+    enabled: false, // Don't auto-fetch, just read from cache
   });
 
   const mongoStats = dbStatus?.status?.mongodb;
@@ -106,14 +108,18 @@ export default function RealtimeSidebar({ className = '' }: RealtimeSidebarProps
               <div className="text-lg">🍃</div>
               <span className="text-sm font-medium text-slate-800">MongoDB</span>
             </div>
-            {mongoStats?.connected ? (
+            {isDbStatusLoading ? (
+              <div className="h-4 w-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
+            ) : mongoStats?.connected ? (
               <CheckCircle className="h-4 w-4 text-status-online" />
             ) : (
               <AlertCircle className="h-4 w-4 text-status-offline" />
             )}
           </div>
           <div className="text-xs text-slate-600">
-            {mongoStats?.connected ? (
+            {isDbStatusLoading ? (
+              <span className="text-slate-500">Loading...</span>
+            ) : mongoStats?.connected ? (
               <span className="text-status-online">Online • {mongoStats.responseTime}ms</span>
             ) : (
               <span className="text-status-offline">Offline</span>
@@ -131,14 +137,18 @@ export default function RealtimeSidebar({ className = '' }: RealtimeSidebarProps
               <div className="text-lg">🔍</div>
               <span className="text-sm font-medium text-slate-800">Elasticsearch</span>
             </div>
-            {elasticStats?.connected ? (
+            {isDbStatusLoading ? (
+              <div className="h-4 w-4 border-2 border-slate-300 border-t-slate-600 rounded-full animate-spin"></div>
+            ) : elasticStats?.connected ? (
               <CheckCircle className="h-4 w-4 text-status-online" />
             ) : (
               <AlertCircle className="h-4 w-4 text-status-offline" />
             )}
           </div>
           <div className="text-xs text-slate-600">
-            {elasticStats?.connected ? (
+            {isDbStatusLoading ? (
+              <span className="text-slate-500">Loading...</span>
+            ) : elasticStats?.connected ? (
               <span className="text-status-online">Online • {elasticStats.responseTime}ms</span>
             ) : (
               <span className="text-status-offline">Offline</span>

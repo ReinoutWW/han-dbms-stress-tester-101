@@ -273,11 +273,11 @@ router.get('/', async (req, res) => {
       const recentTests = user.testResults.filter(r => r.createdAt > yesterday).length;
       
       // Performance rating based on response times
-      const performanceRating = avgResponseTime === 0 ? 0 : 
-        avgResponseTime < 50 ? 'A' :
-        avgResponseTime < 100 ? 'B' :
-        avgResponseTime < 200 ? 'C' :
-        avgResponseTime < 500 ? 'D' : 'F';
+      const performanceRating = avgResponseTime === 0 ? 'Not Rated' : 
+        avgResponseTime < 50 ? 'Excellent' :
+        avgResponseTime < 100 ? 'Good' :
+        avgResponseTime < 200 ? 'Average' :
+        avgResponseTime < 500 ? 'Poor' : 'Poor';
 
       return {
         id: user.id,
