@@ -1,3 +1,4 @@
+import React from 'react';
 import { motion } from 'framer-motion';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -17,24 +18,53 @@ interface RealtimeSidebarProps {
 }
 
 export default function RealtimeSidebar({ className = '' }: RealtimeSidebarProps) {
+  console.log('RealtimeSidebar: Component rendered');
+  
   // Fetch database status with frequent updates
   const { data: dbStatus, isLoading: isDbStatusLoading, error: dbStatusError } = useQuery({
     queryKey: ['database-status'],
-    queryFn: apiService.getDatabaseStatus,
+    queryFn: () => {
+      console.log('RealtimeSidebar: queryFn called - making API request');
+      return apiService.getDatabaseStatus();
+    },
     refetchInterval: 1000, // Update every second for real-time feel
     refetchOnWindowFocus: false, // Prevent refetch on window focus
     retry: 3, // Retry failed requests up to 3 times
+    staleTime: 0, // Always consider data stale
+    gcTime: 0, // Don't cache the data
   });
+  
+  // Log query state changes
+  React.useEffect(() => {
+    console.log('RealtimeSidebar: Query state changed', {
+      isLoading: isDbStatusLoading,
+      hasError: !!dbStatusError,
+      error: dbStatusError,
+      hasData: !!dbStatus,
+      data: dbStatus
+    });
+  }, [dbStatus, isDbStatusLoading, dbStatusError]);
 
-  // Get leaderboard data from cache (managed by Leaderboard component)
+  // Fetch leaderboard for aggregated stats
   const { data: leaderboardData } = useQuery({
     queryKey: ['leaderboard'],
     queryFn: apiService.getLeaderboard,
-    enabled: false, // Don't auto-fetch, just read from cache
+    refetchInterval: 2000, // Update every 2 seconds
   });
 
-  const mongoStats = dbStatus?.status?.mongodb;
-  const elasticStats = dbStatus?.status?.elasticsearch;
+  const mongoStats = (dbStatus as any)?.status?.mongodb;
+  const elasticStats = (dbStatus as any)?.status?.elasticsearch;
+  
+  console.log('RealtimeSidebar: Current state:', {
+    isLoading: isDbStatusLoading,
+    hasError: !!dbStatusError,
+    error: dbStatusError,
+    hasData: !!dbStatus,
+    dbStatus,
+    mongoStats,
+    elasticStats
+  });
+  
   
   // Calculate aggregated performance from leaderboard
   const aggregatedStats = leaderboardData ? {

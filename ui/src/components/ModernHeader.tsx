@@ -54,12 +54,7 @@ export default function ModernHeader({ currentUser, totalUsers = 0, isLive = tru
             transition={{ delay: 0.3 }}
             className="hidden lg:block text-center"
           >
-            <h2 className="text-2xl font-display font-bold text-slate-800 mb-1">
-              Epic NoSQL Showdown
-            </h2>
-            <p className="text-slate-600 text-sm">
-              MongoDB vs Elasticsearch Performance Battle
-            </p>
+            {/* Title removed */}
           </motion.div>
 
           {/* User & Status Info */}
@@ -122,12 +117,7 @@ export default function ModernHeader({ currentUser, totalUsers = 0, isLive = tru
           transition={{ delay: 0.5 }}
           className="lg:hidden pb-3 border-t border-slate-300/50 pt-3 text-center"
         >
-          <h2 className="text-lg font-display font-bold text-slate-800 mb-1">
-            Epic NoSQL Showdown
-          </h2>
-          <p className="text-slate-600 text-xs">
-            MongoDB vs Elasticsearch Performance Battle
-          </p>
+          {/* Title removed */}
         </motion.div>
       </div>
     </motion.header>

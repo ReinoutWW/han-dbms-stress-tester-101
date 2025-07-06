@@ -159,7 +159,15 @@ class ApiService {
   }
 
   async getDatabaseStatus(): Promise<DatabaseStatus> {
-    return this.request('/stress-test/database/status');
+    console.log('ApiService: getDatabaseStatus called');
+    try {
+      const result = await this.request<DatabaseStatus>('/stress-test/database/status');
+      console.log('ApiService: getDatabaseStatus result:', result);
+      return result;
+    } catch (error) {
+      console.log('ApiService: getDatabaseStatus error:', error);
+      throw error;
+    }
   }
 
   async runStressTest(params: { 
