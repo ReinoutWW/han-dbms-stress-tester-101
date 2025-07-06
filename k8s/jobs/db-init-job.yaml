@@ -1,0 +1,91 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-init
+  namespace: nosql-showdown
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: db-init
+        image: postgres:15-alpine
+        env:
+        - name: PGPASSWORD
+          value: showdown_pass_2024
+        command: ["sh", "-c"]
+        args:
+        - |
+          psql -h postgres.nosql-showdown.svc.cluster.local -U showdown_user -d showdown_db <<EOF
+          -- Create enums
+          DO \$\$ BEGIN
+              CREATE TYPE "TestType" AS ENUM ('STRESS_TEST', 'PERFORMANCE_TEST', 'COMPARISON_TEST');
+          EXCEPTION WHEN duplicate_object THEN null;
+          END \$\$;
+          
+          DO \$\$ BEGIN
+              CREATE TYPE "Database" AS ENUM ('MONGODB', 'ELASTICSEARCH');
+          EXCEPTION WHEN duplicate_object THEN null;
+          END \$\$;
+          
+          DO \$\$ BEGIN
+              CREATE TYPE "OperationType" AS ENUM ('CREATE', 'READ', 'UPDATE', 'DELETE', 'SEARCH', 'AGGREGATE');
+          EXCEPTION WHEN duplicate_object THEN null;
+          END \$\$;
+          
+          -- Create tables
+          CREATE TABLE IF NOT EXISTS "User" (
+              "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
+              "name" TEXT NOT NULL,
+              "email" TEXT,
+              "score" INTEGER NOT NULL DEFAULT 0,
+              "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+          );
+          
+          CREATE TABLE IF NOT EXISTS "TestResult" (
+              "id" TEXT NOT NULL DEFAULT gen_random_uuid(),
+              "userId" TEXT NOT NULL,
+              "testType" "TestType" NOT NULL,
+              "database" "Database" NOT NULL,
+              "operationType" "OperationType" NOT NULL,
+              "responseTime" INTEGER NOT NULL,
+              "success" BOOLEAN NOT NULL,
+              "errorMessage" TEXT,
+              "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+              CONSTRAINT "TestResult_pkey" PRIMARY KEY ("id")
+          );
+          
+          -- Create indexes
+          CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
+          CREATE INDEX IF NOT EXISTS "TestResult_userId_idx" ON "TestResult"("userId");
+          CREATE INDEX IF NOT EXISTS "TestResult_createdAt_idx" ON "TestResult"("createdAt");
+          
+          -- Add foreign key
+          DO \$\$ BEGIN
+              ALTER TABLE "TestResult" ADD CONSTRAINT "TestResult_userId_fkey" 
+                  FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+          EXCEPTION WHEN duplicate_object THEN null;
+          END \$\$;
+          
+          -- Create Prisma migrations table
+          CREATE TABLE IF NOT EXISTS "_prisma_migrations" (
+              "id" VARCHAR(36) NOT NULL,
+              "checksum" VARCHAR(64) NOT NULL,
+              "finished_at" TIMESTAMPTZ,
+              "migration_name" VARCHAR(255) NOT NULL,
+              "logs" TEXT,
+              "rolled_back_at" TIMESTAMPTZ,
+              "started_at" TIMESTAMPTZ NOT NULL DEFAULT now(),
+              "applied_steps_count" INTEGER NOT NULL DEFAULT 0,
+              PRIMARY KEY ("id")
+          );
+          
+          -- Insert a migration record
+          INSERT INTO "_prisma_migrations" (id, checksum, finished_at, migration_name, applied_steps_count)
+          VALUES ('init_20240706', 'manual_init', NOW(), '20240706_initial_schema', 1)
+          ON CONFLICT DO NOTHING;
+          
+          \echo 'Database initialization completed!'
+          EOF 

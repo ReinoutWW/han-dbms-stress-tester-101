@@ -1,0 +1,84 @@
+%%{init: {'theme':'default'}}%%
+%% Epic Interactive NoSQL Showdown - System Communication Flow
+%% This diagram shows how all components communicate in the cluster
+%% Students access via ngrok → Admin Laptop → MetalLB → Services
+
+graph TB
+    %% External Access Layer
+    subgraph Internet["Internet Access"]
+        Students["Students<br/>(Browsers/Mobile)"]
+        Admin["Admin Laptop<br/>(ngrok host)"]
+    end
+    
+    %% ngrok Tunnels
+    subgraph ngrok["ngrok Tunnels"]
+        NGK1["showdown-XXX.ngrok.io"]
+        NGK2["api-XXX.ngrok.io"]
+        NGK3["grafana-XXX.ngrok.io"]
+    end
+    
+    %% MetalLB LoadBalancers
+    subgraph LB["MetalLB LoadBalancers<br/>(10.0.1.240-250)"]
+        LB1["React UI<br/>10.0.1.243:80"]
+        LB2["API<br/>10.0.1.244:3000"]
+        LB3["Grafana<br/>10.0.1.245:3000"]
+        LB4["Kibana<br/>10.0.1.242:5601"]
+    end
+    
+    %% Application Layer
+    subgraph Apps["Application Layer"]
+        React["React Frontend<br/>(Socket.io)"]
+        NodeJS["Node.js API<br/>(Express + Socket.io)"]
+        Postgres["PostgreSQL<br/>(User Data)"]
+    end
+    
+    %% Database Layer
+    subgraph DBs["Database Benchmarking Layer"]
+        Mongo["MongoDB<br/>(3-node replica set)"]
+        ES["Elasticsearch<br/>(3-node cluster)"]
+    end
+    
+    %% Monitoring Layer
+    subgraph Monitor["Monitoring Layer"]
+        Prom["Prometheus<br/>(Metrics)"]
+        Graf["Grafana<br/>(Dashboards)"]
+    end
+    
+    %% Communication Flow
+    Students --> NGK1
+    NGK1 --> Admin
+    NGK2 --> Admin
+    NGK3 --> Admin
+    
+    Admin --> LB1
+    Admin --> LB2
+    Admin --> LB3
+    
+    LB1 --> React
+    LB2 --> NodeJS
+    LB3 --> Graf
+    
+    React -.->|WebSocket| NodeJS
+    NodeJS --> Postgres
+    NodeJS --> Mongo
+    NodeJS --> ES
+    
+    Mongo --> Prom
+    ES --> Prom
+    NodeJS --> Prom
+    Prom --> Graf
+    
+    Graf -.->|Real-time Updates| React
+    
+    %% Styling
+    classDef external fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef loadbalancer fill:#9f9,stroke:#333,stroke-width:2px;
+    classDef app fill:#99f,stroke:#333,stroke-width:2px;
+    classDef db fill:#ff9,stroke:#333,stroke-width:2px;
+    classDef monitor fill:#f99,stroke:#333,stroke-width:2px;
+    
+    class Students,Admin external;
+    class LB1,LB2,LB3,LB4 loadbalancer;
+    class React,NodeJS,Postgres app;
+    class Mongo,ES db;
+    class Prom,Graf monitor;
