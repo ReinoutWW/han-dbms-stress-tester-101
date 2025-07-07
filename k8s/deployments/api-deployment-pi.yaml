@@ -30,7 +30,7 @@ spec:
                 values: ["pi5-8gb"]
       containers:
       - name: api
-        image: nosql-showdown/api:pi-1.0.0
+        image: reinoutw/nosql-showdown-api:pi-1.0.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000

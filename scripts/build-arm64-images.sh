@@ -10,7 +10,7 @@ echo "============================================================"
 
 # Configuration
 REGISTRY="${DOCKER_REGISTRY:-docker.io}"
-NAMESPACE="${DOCKER_NAMESPACE:-nosql-showdown}"
+NAMESPACE="${DOCKER_NAMESPACE:-reinoutw}"
 API_VERSION="${API_VERSION:-pi-1.0.0}"
 UI_VERSION="${UI_VERSION:-pi-1.0.0}"
 
@@ -77,12 +77,12 @@ build_api_image() {
     cd api
     
     # Build multi-architecture image
-    echo "Building ${NAMESPACE}/api:${API_VERSION}"
+    echo "Building ${NAMESPACE}/nosql-showdown-api:${API_VERSION}"
     
     docker buildx build \
         --platform linux/arm64,linux/amd64 \
-        --tag ${REGISTRY}/${NAMESPACE}/api:${API_VERSION} \
-        --tag ${REGISTRY}/${NAMESPACE}/api:latest-arm64 \
+        --tag ${REGISTRY}/${NAMESPACE}/nosql-showdown-api:${API_VERSION} \
+        --tag ${REGISTRY}/${NAMESPACE}/nosql-showdown-api:latest-arm64 \
         --file Dockerfile.arm64 \
         --push \
         .
@@ -99,12 +99,12 @@ build_ui_image() {
     cd ui
     
     # Build multi-architecture image
-    echo "Building ${NAMESPACE}/ui:${UI_VERSION}"
+    echo "Building ${NAMESPACE}/nosql-showdown-ui:${UI_VERSION}"
     
     docker buildx build \
         --platform linux/arm64,linux/amd64 \
-        --tag ${REGISTRY}/${NAMESPACE}/ui:${UI_VERSION} \
-        --tag ${REGISTRY}/${NAMESPACE}/ui:latest-arm64 \
+        --tag ${REGISTRY}/${NAMESPACE}/nosql-showdown-ui:${UI_VERSION} \
+        --tag ${REGISTRY}/${NAMESPACE}/nosql-showdown-ui:latest-arm64 \
         --file Dockerfile.arm64 \
         --push \
         .
@@ -122,7 +122,7 @@ build_local_images() {
     cd api
     docker buildx build \
         --platform linux/arm64 \
-        --tag ${NAMESPACE}/api:${API_VERSION} \
+        --tag ${NAMESPACE}/nosql-showdown-api:${API_VERSION} \
         --file Dockerfile.arm64 \
         --load \
         .
@@ -132,7 +132,7 @@ build_local_images() {
     cd ui
     docker buildx build \
         --platform linux/arm64 \
-        --tag ${NAMESPACE}/ui:${UI_VERSION} \
+        --tag ${NAMESPACE}/nosql-showdown-ui:${UI_VERSION} \
         --file Dockerfile.arm64 \
         --load \
         .
@@ -149,11 +149,11 @@ save_images_for_transfer() {
     
     # Save API image
     echo "Saving API image..."
-    docker save ${NAMESPACE}/api:${API_VERSION} | gzip > images/nosql-api-${API_VERSION}.tar.gz
+    docker save ${NAMESPACE}/nosql-showdown-api:${API_VERSION} | gzip > images/nosql-api-${API_VERSION}.tar.gz
     
     # Save UI image
     echo "Saving UI image..."
-    docker save ${NAMESPACE}/ui:${UI_VERSION} | gzip > images/nosql-ui-${UI_VERSION}.tar.gz
+    docker save ${NAMESPACE}/nosql-showdown-ui:${UI_VERSION} | gzip > images/nosql-ui-${UI_VERSION}.tar.gz
     
     # Create transfer script
     cat > images/load-images.sh << 'EOF'
@@ -200,8 +200,8 @@ main_menu() {
             build_ui_image
             echo -e "\n${GREEN}✅ All images built and pushed to registry${NC}"
             echo -e "${YELLOW}📋 Images available at:${NC}"
-            echo "  - ${REGISTRY}/${NAMESPACE}/api:${API_VERSION}"
-            echo "  - ${REGISTRY}/${NAMESPACE}/ui:${UI_VERSION}"
+            echo "  - ${REGISTRY}/${NAMESPACE}/nosql-showdown-api:${API_VERSION}"
+            echo "  - ${REGISTRY}/${NAMESPACE}/nosql-showdown-ui:${UI_VERSION}"
             ;;
         2)
             check_prerequisites

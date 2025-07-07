@@ -31,7 +31,7 @@ spec:
                 values: ["pi5-8gb"]
       containers:
       - name: data-loader
-        image: nosql-showdown/api:pi-1.0.0
+        image: reinoutw/nosql-showdown-api:pi-1.0.0
         imagePullPolicy: IfNotPresent
         command: ["node", "/app/scripts/load-kaggle-data-direct.js"]
         env:
