@@ -6,6 +6,7 @@ metadata:
   labels:
     app: ui
     component: frontend
+    platform: arm64
 spec:
   replicas: 2
   selector:
@@ -19,27 +20,28 @@ spec:
     spec:
       containers:
       - name: ui
-        image: nosql-showdown-ui:v1.0.0
-        imagePullPolicy: Never
+        image: nosql-showdown/ui:pi-1.0.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
           protocol: TCP
         env:
         - name: NODE_ENV
           value: "production"
+        # Optimized resources for Pi
         resources:
           requests:
             memory: "64Mi"
             cpu: "50m"
           limits:
             memory: "128Mi"
-            cpu: "100m"
+            cpu: "200m"
         livenessProbe:
           httpGet:
             path: /health
             port: 80
           initialDelaySeconds: 30
-          periodSeconds: 10
+          periodSeconds: 30
           timeoutSeconds: 5
           failureThreshold: 3
         readinessProbe:
@@ -47,9 +49,9 @@ spec:
             path: /health
             port: 80
           initialDelaySeconds: 5
-          periodSeconds: 5
+          periodSeconds: 10
           timeoutSeconds: 3
-          failureThreshold: 2
+          failureThreshold: 3
       restartPolicy: Always
 ---
 apiVersion: v1
@@ -61,7 +63,8 @@ metadata:
     app: ui
     component: frontend
 spec:
-  type: ClusterIP
+  type: LoadBalancer
+  loadBalancerIP: 10.0.1.243
   ports:
   - port: 80
     targetPort: 80
@@ -83,7 +86,7 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
 spec:
   rules:
-  - host: nosql-showdown.local
+  - host: showdown.local
     http:
       paths:
       - path: /
@@ -93,12 +96,3 @@ spec:
             name: ui
             port:
               number: 80
-  - http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: ui
-            port:
-              number: 80 

@@ -1,4 +1,7 @@
-# Multi-stage build for production
+# Multi-architecture build for ARM64 and AMD64
+# Optimized for Raspberry Pi deployment
+
+# Build stage - using multi-arch node image
 FROM node:18-alpine AS builder
 
 # Set working directory
@@ -16,7 +19,7 @@ COPY . .
 # Build the app
 RUN npm run build
 
-# Production stage
+# Production stage - using multi-arch nginx image
 FROM nginx:alpine
 
 # Copy built app from builder stage
@@ -25,8 +28,15 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
+# Add curl for health checks
+RUN apk add --no-cache curl
+
 # Expose port
 EXPOSE 80
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost/health || exit 1
+
 # Start nginx
-CMD ["nginx", "-g", "daemon off;"] 
+CMD ["nginx", "-g", "daemon off;"]

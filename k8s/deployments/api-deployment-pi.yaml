@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: nosql-showdown
+  labels:
+    app: api
+    component: backend
+    platform: arm64
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        component: backend
+    spec:
+      # Node affinity for Pi nodes with sufficient memory
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: hardware
+                operator: In
+                values: ["pi5-8gb"]
+      containers:
+      - name: api
+        image: nosql-showdown/api:pi-1.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+          name: http
+        - containerPort: 9091
+          name: metrics
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: PORT
+          value: "3000"
+        - name: DATABASE_URL
+          value: "postgresql://showdown_user:showdown_pass_2024@postgres.nosql-showdown.svc.cluster.local:5432/showdown_db"
+        - name: MONGODB_URL
+          value: "mongodb://admin:mongodb_pass_2024@mongodb.databases.svc.cluster.local:27017/showdown_benchmark?authSource=admin"
+        - name: ELASTICSEARCH_URL
+          value: "http://elasticsearch.databases.svc.cluster.local:9200"
+        - name: CORS_ORIGIN
+          value: "http://10.0.1.243,http://10.0.1.244,http://showdown.local,https://*.ngrok.io"
+        # Optimized resources for Pi
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+      # Tolerate control plane nodes
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule

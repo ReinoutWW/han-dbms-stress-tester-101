@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-kaggle-data
+  namespace: nosql-showdown
+  labels:
+    app: kaggle-data-loader
+    version: pi-1.0.0
+    platform: arm64
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 7200  # 2 hour timeout
+  ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+  template:
+    metadata:
+      name: load-kaggle-data
+      labels:
+        app: kaggle-data-loader
+        version: pi-1.0.0
+    spec:
+      restartPolicy: OnFailure
+      # Prefer nodes with more memory
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: hardware
+                operator: In
+                values: ["pi5-8gb"]
+      containers:
+      - name: data-loader
+        image: nosql-showdown/api:pi-1.0.0
+        imagePullPolicy: IfNotPresent
+        command: ["node", "/app/scripts/load-kaggle-data-direct.js"]
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: MONGODB_URL
+          value: "mongodb://admin:mongodb_pass_2024@mongodb.databases.svc.cluster.local:27017/showdown_benchmark?authSource=admin"
+        - name: ELASTICSEARCH_URL
+          value: "http://elasticsearch.databases.svc.cluster.local:9200"
+        - name: DATA_PATH
+          value: "/data/kaggle-finance"
+        # Pi-optimized settings
+        - name: BATCH_SIZE
+          value: "5000"  # Smaller batches for Pi
+        - name: TRANSACTION_LIMIT
+          value: "200000"  # Default to 200k for demos
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"

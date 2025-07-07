@@ -39,7 +39,8 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         console.log('🚀 Test started:', data);
         setIsRunningTest(true);
         setTestProgress({ mongodb: 0, elasticsearch: 0 });
-        toast.loading('🚀 Starting stress test against MongoDB and Elasticsearch...', { id: 'stress-test' });
+        // Update the existing toast instead of creating a new one
+        toast.loading('🚀 Running stress test against MongoDB and Elasticsearch...', { id: 'stress-test' });
       } else {
         // Show notification for other users' tests
         toast(`🏃‍♂️ ${data.userName} started a stress test!`, { 
@@ -113,9 +114,10 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     mutationFn: (params: { userId: string; operations: number; concurrency: number }) =>
       apiService.runStressTest(params),
     onMutate: () => {
-      // Don't set loading state here - wait for Socket.io event
-      // setIsRunningTest(true);
-      // toast.loading('🚀 Running stress test...', { id: 'stress-test' });
+      // Provide immediate feedback
+      setIsRunningTest(true);
+      setTestProgress({ mongodb: 0, elasticsearch: 0 });
+      toast.loading('🚀 Initializing stress test...', { id: 'stress-test' });
     },
     onSuccess: (data) => {
       // Socket.io events handle the UI updates, but we still need to store the result
