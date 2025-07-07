@@ -18,9 +18,28 @@ spec:
         app: ui
         component: frontend
     spec:
+      initContainers:
+      # Fix hardcoded URLs before starting nginx
+      - name: fix-urls
+        image: reinoutw/nosql-showdown-ui:pi-1.0.0
+        command: ["/bin/sh"]
+        args: 
+        - -c
+        - |
+          echo "Fixing hardcoded API URLs..."
+          cd /usr/share/nginx/html
+          find . -name "*.js" -type f -exec sed -i 's|http://localhost:3000/api|/api|g' {} + || true
+          find . -name "*.js" -type f -exec sed -i 's|http://localhost:3000|'|g' {} + || true
+          find . -name "*.js" -type f -exec sed -i 's|ws://localhost:3000|'|g' {} + || true
+          find . -name "*.js" -type f -exec sed -i 's|localhost:3000|'|g' {} + || true
+          echo "URLs fixed!"
+          cp -r /usr/share/nginx/html/* /fixed-html/
+        volumeMounts:
+        - name: fixed-html
+          mountPath: /fixed-html
       containers:
       - name: ui
-        image: reinoutw/nosql-showdown-ui:pi-2.0.0
+        image: reinoutw/nosql-showdown-ui:pi-1.0.0
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 80
@@ -28,7 +47,12 @@ spec:
         env:
         - name: NODE_ENV
           value: "production"
-        # Optimized resources for Pi
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d/default.conf
+          subPath: default.conf
+        - name: fixed-html
+          mountPath: /usr/share/nginx/html
         resources:
           requests:
             memory: "64Mi"
@@ -52,6 +76,12 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 3
           failureThreshold: 3
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: ui-nginx-config
+      - name: fixed-html
+        emptyDir: {}
       restartPolicy: Always
 ---
 apiVersion: v1
@@ -72,27 +102,3 @@ spec:
     name: http
   selector:
     app: ui
----
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: ui-ingress
-  namespace: nosql-showdown
-  labels:
-    app: ui
-    component: frontend
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
-spec:
-  rules:
-  - host: showdown.local
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: ui
-            port:
-              number: 80

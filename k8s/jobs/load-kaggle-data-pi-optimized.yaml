@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-kaggle-data
+  namespace: nosql-showdown
+  labels:
+    app: kaggle-data-loader
+    platform: arm64
+    version: pi-1.0.0
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 7200  # 2 hour timeout
+  ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+  template:
+    metadata:
+      name: load-kaggle-data
+      labels:
+        app: kaggle-data-loader
+        version: pi-1.0.0
+    spec:
+      # Prefer nodes with more memory (8GB Pi nodes)
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: hardware
+                operator: In
+                values: ["pi5-8gb"]
+      containers:
+      - name: data-loader
+        image: reinoutw/nosql-showdown-api:pi-1.0.0
+        imagePullPolicy: IfNotPresent
+        command: ["node", "/app/scripts/load-kaggle-data-direct.js"]
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: MONGODB_URL
+          value: "mongodb://admin:mongodb_pass_2024@mongodb.databases.svc.cluster.local:27017/showdown_benchmark?authSource=admin"
+        - name: ELASTICSEARCH_URL
+          value: "http://elasticsearch.databases.svc.cluster.local:9200"
+        - name: DATA_PATH
+          value: "/data/kaggle-finance"
+        # Pi-optimized settings
+        - name: BATCH_SIZE
+          value: "2000"  # Smaller batches to reduce memory usage
+        - name: TRANSACTION_LIMIT
+          value: "200000"  # Default to 200k for demos
+        # Node.js memory optimization
+        - name: NODE_OPTIONS
+          value: "--max-old-space-size=2048"  # Allow Node.js to use up to 2GB
+        resources:
+          requests:
+            memory: "2Gi"    # Increased from 512Mi
+            cpu: "750m"      # Increased CPU
+          limits:
+            memory: "2.5Gi"  # Give some headroom
+            cpu: "1500m"     # 1.5 cores
+      restartPolicy: OnFailure

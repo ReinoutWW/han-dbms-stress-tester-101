@@ -24,23 +24,27 @@ NC='\033[0m' # No Color
 check_prerequisites() {
     echo -e "\n${YELLOW}📋 Checking prerequisites...${NC}"
     
-    # Check kubectl
-    if ! command -v kubectl &> /dev/null; then
-        echo -e "${RED}❌ kubectl not found${NC}"
-        exit 1
-    fi
-    
-    # Check cluster connection
-    if ! kubectl cluster-info &> /dev/null; then
-        echo -e "${RED}❌ Cannot connect to Kubernetes cluster${NC}"
-        echo "Please ensure kubectl is configured correctly"
-        exit 1
-    fi
-    
     # Check if MicroK8s
     if command -v microk8s &> /dev/null; then
         echo -e "${BLUE}ℹ️  Detected MicroK8s installation${NC}"
-        alias kubectl='microk8s kubectl'
+        # Check cluster connection
+        if ! microk8s kubectl cluster-info &> /dev/null; then
+            echo -e "${RED}❌ Cannot connect to MicroK8s cluster${NC}"
+            echo "Please ensure MicroK8s is running"
+            exit 1
+        fi
+    else
+        # Check kubectl
+        if ! command -v kubectl &> /dev/null; then
+            echo -e "${RED}❌ kubectl not found${NC}"
+            exit 1
+        fi
+        # Check cluster connection
+        if ! kubectl cluster-info &> /dev/null; then
+            echo -e "${RED}❌ Cannot connect to Kubernetes cluster${NC}"
+            echo "Please ensure kubectl is configured correctly"
+            exit 1
+        fi
     fi
     
     echo -e "${GREEN}✅ Prerequisites check passed${NC}"
@@ -69,10 +73,10 @@ create_namespaces() {
     echo -e "\n${YELLOW}📁 Creating namespaces...${NC}"
     
     # Create application namespace
-    kubectl create namespace ${NAMESPACE_APP} --dry-run=client -o yaml | kubectl apply -f -
+    microk8s kubectl create namespace ${NAMESPACE_APP} --dry-run=client -o yaml | microk8s kubectl apply -f -
     
     # Create databases namespace
-    kubectl apply -f k8s/namespaces/databases-namespace.yaml
+    microk8s kubectl apply -f k8s/namespaces/databases-namespace.yaml
     
     echo -e "${GREEN}✅ Namespaces created${NC}"
 }
@@ -83,22 +87,26 @@ deploy_databases() {
     
     # Deploy PostgreSQL
     echo "Deploying PostgreSQL..."
-    kubectl apply -f k8s/deployments/postgres-deployment.yaml
+    if [ -f "k8s/deployments/postgres-deployment-pi.yaml" ]; then
+        microk8s kubectl apply -f k8s/deployments/postgres-deployment-pi.yaml
+    else
+        microk8s kubectl apply -f k8s/deployments/postgres-deployment.yaml
+    fi
     
     # Deploy MongoDB (Pi-optimized)
     echo "Deploying MongoDB..."
     if [ -f "k8s/databases/mongodb-deployment-pi.yaml" ]; then
-        kubectl apply -f k8s/databases/mongodb-deployment-pi.yaml
+        microk8s kubectl apply -f k8s/databases/mongodb-deployment-pi.yaml
     else
-        kubectl apply -f k8s/databases/mongodb-deployment.yaml
+        microk8s kubectl apply -f k8s/databases/mongodb-deployment.yaml
     fi
     
     # Deploy Elasticsearch (Pi-optimized)
     echo "Deploying Elasticsearch..."
     if [ -f "k8s/databases/elasticsearch-deployment-pi.yaml" ]; then
-        kubectl apply -f k8s/databases/elasticsearch-deployment-pi.yaml
+        microk8s kubectl apply -f k8s/databases/elasticsearch-deployment-pi.yaml
     else
-        kubectl apply -f k8s/databases/elasticsearch-deployment.yaml
+        microk8s kubectl apply -f k8s/databases/elasticsearch-deployment.yaml
     fi
     
     echo -e "${GREEN}✅ Databases deployed${NC}"
@@ -110,15 +118,15 @@ wait_for_databases() {
     
     # Wait for PostgreSQL
     echo "Waiting for PostgreSQL..."
-    kubectl wait --for=condition=ready pod -l app=postgres -n ${NAMESPACE_APP} --timeout=300s || true
+    microk8s kubectl wait --for=condition=ready pod -l app=postgres -n ${NAMESPACE_APP} --timeout=300s || true
     
     # Wait for MongoDB
     echo "Waiting for MongoDB..."
-    kubectl wait --for=condition=ready pod -l app=mongodb -n ${NAMESPACE_DB} --timeout=300s || true
+    microk8s kubectl wait --for=condition=ready pod -l app=mongodb -n ${NAMESPACE_DB} --timeout=300s || true
     
     # Wait for Elasticsearch
     echo "Waiting for Elasticsearch..."
-    kubectl wait --for=condition=ready pod -l app=elasticsearch -n ${NAMESPACE_DB} --timeout=300s || true
+    microk8s kubectl wait --for=condition=ready pod -l app=elasticsearch -n ${NAMESPACE_DB} --timeout=300s || true
     
     echo -e "${GREEN}✅ Databases are ready${NC}"
 }
@@ -128,12 +136,16 @@ initialize_databases() {
     echo -e "\n${YELLOW}🔨 Initializing database schemas...${NC}"
     
     # Run Prisma migrations
-    if [ -f "k8s/jobs/prisma-migrate-job.yaml" ]; then
+    if [ -f "k8s/jobs/prisma-migrate-job-pi.yaml" ]; then
         echo "Running Prisma migrations..."
-        kubectl apply -f k8s/jobs/prisma-migrate-job.yaml
-        
+        microk8s kubectl apply -f k8s/jobs/prisma-migrate-job-pi.yaml
         # Wait for migration to complete
-        kubectl wait --for=condition=complete job/prisma-migrate -n ${NAMESPACE_APP} --timeout=300s || true
+        microk8s kubectl wait --for=condition=complete job/prisma-migrate -n ${NAMESPACE_APP} --timeout=300s || true
+    elif [ -f "k8s/jobs/prisma-migrate-job.yaml" ]; then
+        echo "Running Prisma migrations..."
+        microk8s kubectl apply -f k8s/jobs/prisma-migrate-job.yaml
+        # Wait for migration to complete
+        microk8s kubectl wait --for=condition=complete job/prisma-migrate -n ${NAMESPACE_APP} --timeout=300s || true
     fi
     
     echo -e "${GREEN}✅ Database schemas initialized${NC}"
@@ -146,18 +158,18 @@ deploy_application() {
     # Deploy API (Pi-optimized)
     echo "Deploying API service..."
     if [ -f "k8s/deployments/api-deployment-pi.yaml" ]; then
-        kubectl apply -f k8s/deployments/api-deployment-pi.yaml
+        microk8s kubectl apply -f k8s/deployments/api-deployment-pi.yaml
     else
-        kubectl apply -f k8s/deployments/api-deployment.yaml
+        microk8s kubectl apply -f k8s/deployments/api-deployment.yaml
     fi
-    kubectl apply -f k8s/services/api-service.yaml
+    microk8s kubectl apply -f k8s/services/api-service.yaml
     
     # Deploy UI (Pi-optimized)
     echo "Deploying UI service..."
     if [ -f "k8s/deployments/ui-deployment-pi.yaml" ]; then
-        kubectl apply -f k8s/deployments/ui-deployment-pi.yaml
+        microk8s kubectl apply -f k8s/deployments/ui-deployment-pi.yaml
     else
-        kubectl apply -f k8s/deployments/ui-deployment.yaml
+        microk8s kubectl apply -f k8s/deployments/ui-deployment.yaml
     fi
     
     echo -e "${GREEN}✅ Application deployed${NC}"
@@ -171,12 +183,18 @@ load_sample_data() {
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         # Check if data loading job exists
-        if [ -f "k8s/jobs/load-kaggle-data.yaml" ]; then
+        if [ -f "k8s/jobs/load-kaggle-data-pi.yaml" ]; then
             echo "Starting data load job..."
-            kubectl apply -f k8s/jobs/load-kaggle-data.yaml
+            microk8s kubectl apply -f k8s/jobs/load-kaggle-data-pi.yaml
             
             echo -e "${BLUE}ℹ️  Data loading job started. This may take 30-60 minutes.${NC}"
-            echo "Monitor progress with: kubectl logs -n ${NAMESPACE_APP} job/load-kaggle-data -f"
+            echo "Monitor progress with: microk8s kubectl logs -n ${NAMESPACE_APP} job/load-kaggle-data -f"
+        elif [ -f "k8s/jobs/load-kaggle-data.yaml" ]; then
+            echo "Starting data load job..."
+            microk8s kubectl apply -f k8s/jobs/load-kaggle-data.yaml
+            
+            echo -e "${BLUE}ℹ️  Data loading job started. This may take 30-60 minutes.${NC}"
+            echo "Monitor progress with: microk8s kubectl logs -n ${NAMESPACE_APP} job/load-kaggle-data -f"
         else
             echo -e "${YELLOW}⚠️  Data loading job not found${NC}"
         fi
@@ -189,17 +207,17 @@ display_access_info() {
     echo -e "\n${YELLOW}📋 Access Information:${NC}"
     
     # Get service IPs
-    UI_IP=$(kubectl get svc ui -n ${NAMESPACE_APP} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
-    API_IP=$(kubectl get svc api -n ${NAMESPACE_APP} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
+    UI_IP=$(microk8s kubectl get svc ui -n ${NAMESPACE_APP} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
+    API_IP=$(microk8s kubectl get svc api -n ${NAMESPACE_APP} -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
     
     echo -e "${BLUE}Web UI:${NC} http://${UI_IP:-10.0.1.243}"
     echo -e "${BLUE}API:${NC} http://${API_IP:-10.0.1.244}:3000"
     
     echo -e "\n${YELLOW}📋 Useful Commands:${NC}"
-    echo "• Check pod status: kubectl get pods -A"
-    echo "• View logs: kubectl logs -n ${NAMESPACE_APP} deployment/api"
-    echo "• Port forward UI: kubectl port-forward -n ${NAMESPACE_APP} svc/ui 8080:80"
-    echo "• Check data load: kubectl logs -n ${NAMESPACE_APP} job/load-kaggle-data"
+    echo "• Check pod status: microk8s kubectl get pods -A"
+    echo "• View logs: microk8s kubectl logs -n ${NAMESPACE_APP} deployment/api"
+    echo "• Port forward UI: microk8s kubectl port-forward -n ${NAMESPACE_APP} svc/ui 8080:80"
+    echo "• Check data load: microk8s kubectl logs -n ${NAMESPACE_APP} job/load-kaggle-data"
     
     echo -e "\n${YELLOW}📋 Database Access:${NC}"
     echo "• MongoDB: mongodb://admin:mongodb_pass_2024@mongodb.${NAMESPACE_DB}.svc.cluster.local:27017"
@@ -213,19 +231,19 @@ run_health_checks() {
     
     # Check pod status
     echo "Pod Status:"
-    kubectl get pods -n ${NAMESPACE_APP}
-    kubectl get pods -n ${NAMESPACE_DB}
+    microk8s kubectl get pods -n ${NAMESPACE_APP}
+    microk8s kubectl get pods -n ${NAMESPACE_DB}
     
     # Check services
     echo -e "\nService Status:"
-    kubectl get svc -n ${NAMESPACE_APP}
-    kubectl get svc -n ${NAMESPACE_DB}
+    microk8s kubectl get svc -n ${NAMESPACE_APP}
+    microk8s kubectl get svc -n ${NAMESPACE_DB}
     
     # Test API health
-    API_POD=$(kubectl get pod -n ${NAMESPACE_APP} -l app=api -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+    API_POD=$(microk8s kubectl get pod -n ${NAMESPACE_APP} -l app=api -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
     if [ ! -z "$API_POD" ]; then
         echo -e "\nAPI Health Check:"
-        kubectl exec -n ${NAMESPACE_APP} ${API_POD} -- curl -s http://localhost:3000/health || echo "API not ready yet"
+        microk8s kubectl exec -n ${NAMESPACE_APP} ${API_POD} -- curl -s http://localhost:3000/health || echo "API not ready yet"
     fi
 }
 

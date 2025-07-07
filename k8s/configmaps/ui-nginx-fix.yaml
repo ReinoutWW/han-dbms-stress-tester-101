@@ -1,0 +1,73 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ui-nginx-config
+  namespace: nosql-showdown
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+        
+        root /usr/share/nginx/html;
+        index index.html;
+        
+        # Intercept any request to localhost:3000 and rewrite it
+        location ~ ^/(.*)$ {
+            # Check if this is an API or socket.io request by looking at the Referer
+            set $is_api 0;
+            if ($request_uri ~* ^/(api|socket\.io)) {
+                set $is_api 1;
+            }
+            
+            # If it's not an API request, serve static files
+            if ($is_api = 0) {
+                try_files $uri $uri/ /index.html;
+            }
+            
+            # If it's an API request, proxy to backend
+            if ($is_api = 1) {
+                proxy_pass http://api.nosql-showdown.svc.cluster.local:3000$request_uri;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_cache_bypass $http_upgrade;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+                
+                # CORS headers
+                add_header 'Access-Control-Allow-Origin' '*' always;
+                add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+                add_header 'Access-Control-Allow-Headers' 'Origin, X-Requested-With, Content-Type, Accept, Authorization' always;
+                
+                if ($request_method = 'OPTIONS') {
+                    add_header 'Access-Control-Allow-Origin' '*' always;
+                    add_header 'Access-Control-Allow-Methods' 'GET, POST, OPTIONS, PUT, DELETE' always;
+                    add_header 'Access-Control-Allow-Headers' 'Origin, X-Requested-With, Content-Type, Accept, Authorization' always;
+                    add_header 'Access-Control-Max-Age' 1728000;
+                    add_header 'Content-Type' 'text/plain charset=UTF-8';
+                    add_header 'Content-Length' 0;
+                    return 204;
+                }
+            }
+        }
+        
+        # Health check endpoint
+        location /health {
+            return 200 "OK";
+            add_header Content-Type text/plain;
+        }
+    }
+  
+  # Script to fix the hardcoded localhost URLs in the built JavaScript
+  fix-api-url.sh: |
+    #!/bin/sh
+    echo "Fixing hardcoded API URLs in JavaScript files..."
+    cd /usr/share/nginx/html
+    # Replace localhost:3000 with relative URLs in all JS files
+    find . -name "*.js" -type f -exec sed -i 's|http://localhost:3000/api|/api|g' {} +
+    find . -name "*.js" -type f -exec sed -i 's|http://localhost:3000|'|g' {} +
+    find . -name "*.js" -type f -exec sed -i 's|localhost:3000|'|g' {} +
+    echo "API URLs fixed!"

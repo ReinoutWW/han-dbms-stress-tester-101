@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: test-data-loader
+  namespace: nosql-showdown
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: test
+        image: reinoutw/nosql-showdown-api:pi-1.0.0
+        command: 
+        - /bin/sh
+        - -c
+        - |
+          echo "=== Testing data loader environment ==="
+          echo "Node version:"
+          node --version
+          echo ""
+          echo "Checking data directory:"
+          ls -la /data/kaggle-finance/ || echo "Data directory not found!"
+          echo ""
+          echo "Checking script:"
+          ls -la /app/scripts/load-kaggle-data-direct.js || echo "Script not found!"
+          echo ""
+          echo "Testing MongoDB connection:"
+          node -e "console.log('MongoDB URL:', process.env.MONGODB_URL)"
+          echo ""
+          echo "Testing Elasticsearch connection:"
+          curl -s http://elasticsearch.databases.svc.cluster.local:9200 || echo "Cannot reach Elasticsearch"
+          echo "=== Test complete ==="
+        env:
+        - name: MONGODB_URL
+          value: "mongodb://admin:mongodb_pass_2024@mongodb.databases.svc.cluster.local:27017/showdown_benchmark?authSource=admin"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"

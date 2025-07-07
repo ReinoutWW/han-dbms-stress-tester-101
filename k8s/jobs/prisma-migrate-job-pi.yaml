@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prisma-migrate
+  namespace: nosql-showdown
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: prisma-migrate
+        image: reinoutw/nosql-showdown-api:pi-1.0.0
+        imagePullPolicy: IfNotPresent
+        command: ["npx", "prisma", "migrate", "deploy"]
+        env:
+        - name: DATABASE_URL
+          value: "postgresql://showdown_user:showdown_pass_2024@postgres.nosql-showdown.svc.cluster.local:5432/showdown_db"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"

@@ -1,4 +1,5 @@
-const API_BASE_URL = 'http://localhost:3000/api';
+// Use relative URL so it works with any domain (local, ngrok, etc.)
+const API_BASE_URL = '/api';
 
 export interface User {
   id: string;
