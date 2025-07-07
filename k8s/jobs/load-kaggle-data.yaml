@@ -1,0 +1,45 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-kaggle-data
+  namespace: nosql-showdown
+  labels:
+    app: kaggle-data-loader
+    version: v1.1.1
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 7200  # 2 hour timeout
+  ttlSecondsAfterFinished: 3600  # Clean up after 1 hour
+  template:
+    metadata:
+      name: load-kaggle-data
+      labels:
+        app: kaggle-data-loader
+        version: v1.1.1
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: data-loader
+        image: nosql-showdown-api:v1.1.2
+        imagePullPolicy: Never  # For local images
+        command: ["node", "/app/scripts/load-kaggle-data-direct.js"]
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: MONGODB_URL
+          value: "mongodb://admin:mongodb_pass_2024@mongodb.databases.svc.cluster.local:27017/showdown_benchmark?authSource=admin"
+        - name: ELASTICSEARCH_URL
+          value: "http://elasticsearch.databases.svc.cluster.local:9200"
+        - name: DATA_PATH
+          value: "/data/kaggle-finance"
+        - name: BATCH_SIZE
+          value: "10000"
+        - name: TRANSACTION_LIMIT
+          value: "200000"  # Limit to 200k transactions (adjustable)
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1000m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"

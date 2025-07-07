@@ -219,119 +219,8 @@ export function createStressTestRoutes(io?: Server) {
   }
 });
 
-// Manual data loading endpoint for testing
-router.post('/load-test-data', async (req, res) => {
-  try {
-    console.log('🚀 Starting manual transaction data loading...');
-    
-    // Generate sample transaction data
-    const sampleTransactions = [];
-    const transactionTypes = ['CASH_IN', 'CASH_OUT', 'DEBIT', 'PAYMENT', 'TRANSFER'];
-    
-    for (let i = 0; i < 1000; i++) {
-      const step = Math.floor(Math.random() * 744);
-      const amount = Math.random() * 10000 + 10;
-      const isFraud = Math.random() < 0.05;
-      
-      const transaction = {
-        step,
-        type: transactionTypes[Math.floor(Math.random() * transactionTypes.length)],
-        amount: Math.round(amount * 100) / 100,
-        nameOrig: `C${Math.floor(Math.random() * 100000)}`,
-        oldbalanceOrg: Math.round(Math.random() * 50000 * 100) / 100,
-        newbalanceOrig: 0,
-        nameDest: Math.random() < 0.3 ? `M${Math.floor(Math.random() * 10000)}` : `C${Math.floor(Math.random() * 100000)}`,
-        oldbalanceDest: Math.round(Math.random() * 50000 * 100) / 100,
-        newbalanceDest: 0,
-        isFraud,
-        isFlaggedFraud: isFraud && amount > 200000,
-        timestamp: new Date(Date.now() + (step * 60 * 60 * 1000)),
-        hourOfDay: step % 24,
-        dayOfMonth: Math.floor(step / 24) + 1
-      };
-      
-      transaction.newbalanceOrig = transaction.oldbalanceOrg - transaction.amount;
-      transaction.newbalanceDest = transaction.oldbalanceDest + transaction.amount;
-      
-      sampleTransactions.push(transaction);
-    }
-    
-    console.log(`📋 Generated ${sampleTransactions.length} sample transactions`);
-    
-    // Load into Elasticsearch
-    try {
-      await elasticsearchClient.indices.delete({ index: 'transactions' });
-    } catch (error) {
-      // Index doesn't exist, which is fine
-    }
-    
-    // Create index
-    await elasticsearchClient.indices.create({
-      index: 'transactions',
-      body: {
-        mappings: {
-          properties: {
-            step: { type: 'integer' },
-            type: { type: 'keyword' },
-            amount: { type: 'double' },
-            nameOrig: { type: 'keyword' },
-            oldbalanceOrg: { type: 'double' },
-            newbalanceOrig: { type: 'double' },
-            nameDest: { type: 'keyword' },
-            oldbalanceDest: { type: 'double' },
-            newbalanceDest: { type: 'double' },
-            isFraud: { type: 'boolean' },
-            isFlaggedFraud: { type: 'boolean' },
-            timestamp: { type: 'date' },
-            hourOfDay: { type: 'integer' },
-            dayOfMonth: { type: 'integer' }
-          }
-        }
-      }
-    });
-    
-    // Insert in batches
-    const batchSize = 100;
-    let loaded = 0;
-    
-    for (let i = 0; i < sampleTransactions.length; i += batchSize) {
-      const batch = sampleTransactions.slice(i, i + batchSize);
-      
-      const bulkOps = batch.flatMap(t => [
-        { index: { _index: 'transactions', _id: `${t.nameOrig}-${t.step}-${Math.random()}` } },
-        t
-      ]);
-      
-      await elasticsearchClient.bulk({ body: bulkOps });
-      loaded += batch.length;
-    }
-    
-    await elasticsearchClient.indices.refresh({ index: 'transactions' });
-    
-    const fraudCount = sampleTransactions.filter(t => t.isFraud).length;
-    const fraudRate = (fraudCount / sampleTransactions.length) * 100;
-    
-    console.log(`✅ Loaded ${loaded} transactions into Elasticsearch`);
-    console.log(`📈 Fraud rate: ${fraudRate.toFixed(2)}%`);
-    
-    return res.json({
-      success: true,
-      message: `Successfully loaded ${loaded} sample transactions into Elasticsearch`,
-      stats: {
-        totalTransactions: loaded,
-        fraudTransactions: fraudCount,
-        fraudRate: Math.round(fraudRate * 100) / 100
-      }
-    });
-    
-  } catch (error) {
-    console.error('❌ Manual data loading failed:', error);
-    return res.status(500).json({ 
-      error: 'Failed to load test data',
-      details: error instanceof Error ? error.message : String(error)
-    });
-  }
-});
+// Deprecated: Old test data endpoint removed
+// Use /load-kaggle-data for loading the actual transaction dataset
 
 // Load Kaggle CSV data endpoint
 router.post('/load-kaggle-data', async (req, res) => {
@@ -340,8 +229,22 @@ router.post('/load-kaggle-data', async (req, res) => {
     const { parse } = require('csv-parse');
     const path = require('path');
     
+    // Get optional parameters from request
+    const { batchSize = 10000, dataPath: customDataPath } = req.body;
+    
     console.log('🚀 Starting Kaggle data loading...');
-    const dataPath = '/data/kaggle-finance';
+    const dataPath = customDataPath || '/data/kaggle-finance';
+    
+    // Emit loading started event
+    if (io) {
+      io.emit('data:loading:progress', {
+        stage: 'started',
+        message: 'Starting Kaggle data loading',
+        totalStages: 4, // users, cards, transactions, indexing
+        currentStage: 0,
+        timestamp: Date.now()
+      });
+    }
     
     if (!existsSync(dataPath)) {
       return res.status(404).json({ 
@@ -362,166 +265,451 @@ router.post('/load-kaggle-data', async (req, res) => {
     
     console.log(`📁 Found ${files.length} CSV files: ${files.join(', ')}`);
     
+    // Load data in proper order: users -> cards -> transactions
+    const users = new Map();
+    const cards = new Map();
     let totalTransactions = 0;
-    let totalFraud = 0;
-    let loadedFiles = 0;
+    let totalUsers = 0;
+    let totalCards = 0;
     
-    for (const file of files) {
-      const filePath = path.join(dataPath, file);
-      console.log(`📊 Processing: ${file}`);
-      
-      const transactions: any[] = [];
+    // Helper function to clean amount strings
+    const cleanAmount = (amountStr: string): number => {
+      if (!amountStr) return 0;
+      // Remove $ and commas, then parse
+      const cleaned = amountStr.replace(/[$,]/g, '');
+      return parseFloat(cleaned) || 0;
+    };
+    
+    // Load users first
+    const usersFile = files.find((f: string) => f.includes('users'));
+    if (usersFile) {
+      const usersPath = path.join(dataPath, usersFile);
+      console.log(`👤 Loading users from ${usersFile}...`);
       
       await new Promise((resolve, reject) => {
-        createReadStream(filePath)
+        createReadStream(usersPath)
           .pipe(parse({
             columns: true,
             delimiter: ',',
             skip_empty_lines: true
           }))
           .on('data', (row: any) => {
+            const user = {
+              id: row.id,
+              current_age: parseInt(row.current_age) || 0,
+              retirement_age: parseInt(row.retirement_age) || 0,
+              birth_year: parseInt(row.birth_year) || 0,
+              birth_month: parseInt(row.birth_month) || 0,
+              gender: row.gender || '',
+              address: row.address || '',
+              latitude: parseFloat(row.latitude) || 0,
+              longitude: parseFloat(row.longitude) || 0,
+              per_capita_income: parseFloat(row.per_capita_income) || 0
+            };
+            users.set(user.id, user);
+            totalUsers++;
+            
+            // Emit progress update every 100 users
+            if (totalUsers % 100 === 0 && io) {
+              io.emit('data:loading:progress', {
+                stage: 'users',
+                message: `Loading users: ${totalUsers.toLocaleString()} processed`,
+                currentStage: 1,
+                totalStages: 4,
+                itemsProcessed: totalUsers,
+                timestamp: Date.now()
+              });
+            }
+          })
+          .on('end', () => {
+            console.log(`✅ Loaded ${totalUsers} users`);
+            if (io) {
+              io.emit('data:loading:progress', {
+                stage: 'users_complete',
+                message: `Completed loading ${totalUsers.toLocaleString()} users`,
+                currentStage: 1,
+                totalStages: 4,
+                itemsProcessed: totalUsers,
+                timestamp: Date.now()
+              });
+            }
+            resolve(users);
+          })
+          .on('error', reject);
+      });
+    }
+    
+    // Load cards
+    const cardsFile = files.find((f: string) => f.includes('cards'));
+    if (cardsFile) {
+      const cardsPath = path.join(dataPath, cardsFile);
+      console.log(`💳 Loading cards from ${cardsFile}...`);
+      
+      await new Promise((resolve, reject) => {
+        createReadStream(cardsPath)
+          .pipe(parse({
+            columns: true,
+            delimiter: ',',
+            skip_empty_lines: true
+          }))
+          .on('data', (row: any) => {
+            const card = {
+              id: row.id,
+              client_id: row.client_id,
+              card_brand: row.card_brand || '',
+              card_type: row.card_type || '',
+              card_number: row.card_number || '',
+              expires: row.expires || '',
+              cvv: row.cvv || '',
+              has_chip: row.has_chip === 'TRUE' || row.has_chip === 'true' || row.has_chip === '1',
+              num_cards: parseInt(row.num_cards) || 0,
+              credit_limit: parseFloat(row.credit_limit) || 0
+            };
+            cards.set(card.id, card);
+            totalCards++;
+            
+            // Emit progress update every 500 cards
+            if (totalCards % 500 === 0 && io) {
+              io.emit('data:loading:progress', {
+                stage: 'cards',
+                message: `Loading cards: ${totalCards.toLocaleString()} processed`,
+                currentStage: 2,
+                totalStages: 4,
+                itemsProcessed: totalCards,
+                timestamp: Date.now()
+              });
+            }
+          })
+          .on('end', () => {
+            console.log(`✅ Loaded ${totalCards} cards`);
+            if (io) {
+              io.emit('data:loading:progress', {
+                stage: 'cards_complete',
+                message: `Completed loading ${totalCards.toLocaleString()} cards`,
+                currentStage: 2,
+                totalStages: 4,
+                itemsProcessed: totalCards,
+                timestamp: Date.now()
+              });
+            }
+            resolve(cards);
+          })
+          .on('error', reject);
+      });
+    }
+    
+    // Create indices for Elasticsearch and MongoDB
+    // Delete existing indices/collections
+    try {
+      await elasticsearchClient.indices.delete({ index: 'transactions' });
+      await elasticsearchClient.indices.delete({ index: 'users' });
+      await elasticsearchClient.indices.delete({ index: 'cards' });
+    } catch (error) {
+      // Indices might not exist
+    }
+    
+    // Create new indices with proper mappings
+    await elasticsearchClient.indices.create({
+      index: 'users',
+      body: {
+        mappings: {
+          properties: {
+            id: { type: 'keyword' },
+            current_age: { type: 'integer' },
+            retirement_age: { type: 'integer' },
+            birth_year: { type: 'integer' },
+            birth_month: { type: 'integer' },
+            gender: { type: 'keyword' },
+            address: { type: 'text' },
+            latitude: { type: 'float' },
+            longitude: { type: 'float' },
+            per_capita_income: { type: 'float' }
+          }
+        }
+      }
+    });
+    
+    await elasticsearchClient.indices.create({
+      index: 'cards',
+      body: {
+        mappings: {
+          properties: {
+            id: { type: 'keyword' },
+            client_id: { type: 'keyword' },
+            card_brand: { type: 'keyword' },
+            card_type: { type: 'keyword' },
+            card_number: { type: 'keyword' },
+            expires: { type: 'keyword' },
+            cvv: { type: 'keyword' },
+            has_chip: { type: 'boolean' },
+            num_cards: { type: 'integer' },
+            credit_limit: { type: 'float' }
+          }
+        }
+      }
+    });
+    
+    await elasticsearchClient.indices.create({
+      index: 'transactions',
+      body: {
+        mappings: {
+          properties: {
+            id: { type: 'keyword' },
+            date: { type: 'date' },
+            client_id: { type: 'keyword' },
+            card_id: { type: 'keyword' },
+            amount: { type: 'float' },
+            use_chip: { type: 'boolean' },
+            merchant_id: { type: 'keyword' },
+            merchant_city: { type: 'keyword' },
+            merchant_state: { type: 'keyword' },
+            zip: { type: 'keyword' },
+            mcc: { type: 'keyword' }
+          }
+        }
+      }
+    });
+    
+    // Connect to MongoDB first
+    const mongoClient = new MongoClient(config.databases.mongodb.url);
+    await mongoClient.connect();
+    const db = mongoClient.db('showdown_benchmark');
+    
+    // Clear and recreate MongoDB collections
+    try {
+      await db.collection('users').drop();
+      await db.collection('cards').drop();
+      await db.collection('transactions').drop();
+    } catch (error) {
+      // Collections might not exist
+    }
+    
+    // Create MongoDB collections
+    const usersCollection = db.collection('users');
+    const cardsCollection = db.collection('cards');
+    const transactionsCollection = db.collection('transactions');
+    
+    // Load users and cards into both databases in parallel
+    const dataLoadPromises = [];
+    
+    if (users.size > 0) {
+      // Elasticsearch users
+      const userBulkOps = Array.from(users.values()).flatMap(u => [
+        { index: { _index: 'users', _id: u.id } },
+        u
+      ]);
+      dataLoadPromises.push(
+        elasticsearchClient.bulk({ body: userBulkOps })
+          .then(() => console.log(`📥 Loaded ${users.size} users into Elasticsearch`))
+      );
+      
+      // MongoDB users
+      dataLoadPromises.push(
+        usersCollection.insertMany(Array.from(users.values()))
+          .then(() => usersCollection.createIndex({ id: 1 }))
+          .then(() => console.log(`📥 Loaded ${users.size} users into MongoDB`))
+      );
+    }
+    
+    if (cards.size > 0) {
+      // Elasticsearch cards
+      const cardBulkOps = Array.from(cards.values()).flatMap(c => [
+        { index: { _index: 'cards', _id: c.id } },
+        c
+      ]);
+      dataLoadPromises.push(
+        elasticsearchClient.bulk({ body: cardBulkOps })
+          .then(() => console.log(`📥 Loaded ${cards.size} cards into Elasticsearch`))
+      );
+      
+      // MongoDB cards
+      dataLoadPromises.push(
+        cardsCollection.insertMany(Array.from(cards.values()))
+          .then(() => Promise.all([
+            cardsCollection.createIndex({ id: 1 }),
+            cardsCollection.createIndex({ client_id: 1 }),
+            cardsCollection.createIndex({ card_brand: 1 })
+          ]))
+          .then(() => console.log(`📥 Loaded ${cards.size} cards into MongoDB`))
+      );
+    }
+    
+    // Wait for all parallel operations to complete
+    await Promise.all(dataLoadPromises);
+    
+    // Load transactions
+    const transactionsFile = files.find((f: string) => f.includes('transactions'));
+    if (transactionsFile) {
+      const transactionsPath = path.join(dataPath, transactionsFile);
+      console.log(`💰 Loading transactions from ${transactionsFile}...`);
+      console.log('⏳ This may take a few minutes due to file size...');
+      
+      // Emit transaction loading start
+      if (io) {
+        io.emit('data:loading:progress', {
+          stage: 'transactions_start',
+          message: 'Starting to load 13.3 million transactions',
+          currentStage: 3,
+          totalStages: 4,
+          timestamp: Date.now()
+        });
+      }
+      
+      let batch: any[] = [];
+      const actualBatchSize = batchSize || 10000; // Use the batchSize from request or default to 10000
+      let processedCount = 0;
+      
+      await new Promise((resolve, reject) => {
+        const parser = createReadStream(transactionsPath)
+          .pipe(parse({
+            columns: true,
+            delimiter: ',',
+            skip_empty_lines: true
+          }));
+        
+        // Use pause mode for proper backpressure handling
+        parser.pause();
+        
+        const processBatch = async (currentBatch: any[]) => {
+          // Process MongoDB and Elasticsearch in parallel for better performance
+          const promises = [];
+          
+          // Elasticsearch bulk operation
+          const bulkOps = currentBatch.flatMap(t => [
+            { index: { _index: 'transactions', _id: t.id } },
+            t
+          ]);
+          promises.push(elasticsearchClient.bulk({ body: bulkOps }));
+          
+          // MongoDB bulk operation
+          promises.push(transactionsCollection.insertMany(currentBatch));
+          
+          // Wait for both operations to complete
+          await Promise.all(promises);
+        };
+        
+        const processRow = async () => {
+          let row;
+          while ((row = parser.read()) !== null) {
             try {
               const transaction = {
-                step: parseInt(row.step) || 0,
-                type: row.type || 'PAYMENT',
-                amount: parseFloat(row.amount) || 0,
-                nameOrig: row.nameOrig || '',
-                oldbalanceOrg: parseFloat(row.oldbalanceOrg) || 0,
-                newbalanceOrig: parseFloat(row.newbalanceOrig) || 0,
-                nameDest: row.nameDest || '',
-                oldbalanceDest: parseFloat(row.oldbalanceDest) || 0,
-                newbalanceDest: parseFloat(row.newbalanceDest) || 0,
-                isFraud: row.isFraud === '1' || row.isFraud === 1 || row.isFraud === true,
-                isFlaggedFraud: row.isFlaggedFraud === '1' || row.isFlaggedFraud === 1 || row.isFlaggedFraud === true,
-                timestamp: new Date(Date.now() + (parseInt(row.step) * 60 * 60 * 1000)),
-                hourOfDay: parseInt(row.step) % 24,
-                dayOfMonth: Math.floor(parseInt(row.step) / 24) + 1
+                id: row.id,
+                date: new Date(row.date),
+                client_id: row.client_id,
+                card_id: row.card_id,
+                amount: cleanAmount(row.amount),
+                use_chip: row.use_chip === 'Chip Transaction' || row.use_chip === 'true',
+                merchant_id: row.merchant_id || '',
+                merchant_city: row.merchant_city || '',
+                merchant_state: row.merchant_state || '',
+                zip: row.zip || '',
+                mcc: row.mcc || ''
               };
               
-              if (transaction.amount > 0 && transaction.nameOrig && transaction.nameDest) {
-                transactions.push(transaction);
-                if (transaction.isFraud) totalFraud++;
+              batch.push(transaction);
+              
+              // Process batch when it reaches the size limit
+              if (batch.length >= actualBatchSize) {
+                const currentBatch = [...batch];
+                batch = [];
+                
+                await processBatch(currentBatch);
+                
+                processedCount += currentBatch.length;
+                totalTransactions += currentBatch.length;
+                
+                // Emit progress update every 50000 transactions
+                if (processedCount % 50000 === 0) {
+                  console.log(`⏳ Processed ${processedCount.toLocaleString()} transactions...`);
+                  if (io) {
+                    io.emit('data:loading:progress', {
+                      stage: 'transactions',
+                      message: `Loading transactions: ${processedCount.toLocaleString()} / ~13.3M processed`,
+                      currentStage: 3,
+                      totalStages: 4,
+                      itemsProcessed: processedCount,
+                      percentComplete: Math.round((processedCount / 13300000) * 100),
+                      timestamp: Date.now()
+                    });
+                  }
+                }
               }
             } catch (error) {
               // Skip invalid rows
             }
-          })
-          .on('end', () => {
-            console.log(`✅ Parsed ${transactions.length} transactions from ${file}`);
-            resolve(transactions);
-          })
-          .on('error', reject);
-      });
-      
-      // Load into Elasticsearch
-      if (transactions.length > 0) {
-        try {
-          // Create/recreate index on first file
-          if (loadedFiles === 0) {
-            try {
-              await elasticsearchClient.indices.delete({ index: 'transactions' });
-            } catch (error) {
-              // Index doesn't exist
-            }
-            
-            await elasticsearchClient.indices.create({
-              index: 'transactions',
-              body: {
-                mappings: {
-                  properties: {
-                    step: { type: 'integer' },
-                    type: { type: 'keyword' },
-                    amount: { type: 'double' },
-                    nameOrig: { type: 'keyword' },
-                    oldbalanceOrg: { type: 'double' },
-                    newbalanceOrig: { type: 'double' },
-                    nameDest: { type: 'keyword' },
-                    oldbalanceDest: { type: 'double' },
-                    newbalanceDest: { type: 'double' },
-                    isFraud: { type: 'boolean' },
-                    isFlaggedFraud: { type: 'boolean' },
-                    timestamp: { type: 'date' },
-                    hourOfDay: { type: 'integer' },
-                    dayOfMonth: { type: 'integer' }
-                  }
-                }
-              }
+          }
+        };
+        
+        parser.on('readable', processRow);
+        
+        parser.on('end', async () => {
+          // Process remaining batch
+          if (batch.length > 0) {
+            await processBatch(batch);
+            totalTransactions += batch.length;
+          }
+          
+          console.log(`✅ Loaded ${totalTransactions.toLocaleString()} transactions`);
+          if (io) {
+            io.emit('data:loading:progress', {
+              stage: 'transactions_complete',
+              message: `Completed loading ${totalTransactions.toLocaleString()} transactions`,
+              currentStage: 3,
+              totalStages: 4,
+              itemsProcessed: totalTransactions,
+              percentComplete: 100,
+              timestamp: Date.now()
             });
           }
-          
-          // Bulk load transactions
-          const batchSize = 1000;
-          for (let i = 0; i < transactions.length; i += batchSize) {
-            const batch = transactions.slice(i, i + batchSize);
-            const bulkOps = batch.flatMap(t => [
-              { index: { _index: 'transactions', _id: `${t.nameOrig}-${t.step}-${Math.random()}` } },
-              t
-            ]);
-            
-            await elasticsearchClient.bulk({ body: bulkOps });
-          }
-          
-          totalTransactions += transactions.length;
-          loadedFiles++;
-          
-          console.log(`📥 Loaded ${transactions.length} transactions from ${file} into Elasticsearch`);
-        } catch (error) {
-          console.error(`❌ Failed to load ${file} into Elasticsearch:`, error);
-        }
+          resolve(totalTransactions);
+        });
+        
+        parser.on('error', reject);
+        
+        // Start processing
+        parser.resume();
+      });
+      
+      // Create indexes for MongoDB transactions
+      if (io) {
+        io.emit('data:loading:progress', {
+          stage: 'indexing',
+          message: 'Creating database indexes for optimal performance',
+          currentStage: 4,
+          totalStages: 4,
+          timestamp: Date.now()
+        });
       }
       
-      // Load into MongoDB if auth is working
-      try {
-        const mongoClient = new MongoClient(config.databases.mongodb.url);
-        await mongoClient.connect();
-        
-        const db = mongoClient.db('showdown_benchmark');
-        const collection = db.collection('transactions');
-        
-        if (loadedFiles === 0) {
-          // Clear existing data on first file
-          await collection.deleteMany({});
-          
-          // Create indexes
-          await collection.createIndex({ type: 1 });
-          await collection.createIndex({ amount: 1 });
-          await collection.createIndex({ isFraud: 1 });
-          await collection.createIndex({ step: 1 });
-          await collection.createIndex({ nameOrig: 1 });
-          await collection.createIndex({ nameDest: 1 });
-        }
-        
-        if (transactions.length > 0) {
-          const batchSize = 1000;
-          for (let i = 0; i < transactions.length; i += batchSize) {
-            const batch = transactions.slice(i, i + batchSize);
-            await collection.insertMany(batch);
-          }
-          console.log(`📥 Loaded ${transactions.length} transactions from ${file} into MongoDB`);
-        }
-        
-        await mongoClient.close();
-      } catch (error) {
-        console.error(`❌ Failed to load ${file} into MongoDB:`, error);
-      }
+      await transactionsCollection.createIndex({ client_id: 1 });
+      await transactionsCollection.createIndex({ card_id: 1 });
+      await transactionsCollection.createIndex({ merchant_city: 1 });
+      await transactionsCollection.createIndex({ merchant_state: 1 });
+      await transactionsCollection.createIndex({ amount: 1 });
+      await transactionsCollection.createIndex({ date: 1 });
+      await transactionsCollection.createIndex({ mcc: 1 });
+      console.log('✅ Created MongoDB indexes');
     }
     
-    // Refresh Elasticsearch index
+    // Refresh Elasticsearch indices
+    await elasticsearchClient.indices.refresh({ index: 'users' });
+    await elasticsearchClient.indices.refresh({ index: 'cards' });
     await elasticsearchClient.indices.refresh({ index: 'transactions' });
     
-    const fraudRate = totalTransactions > 0 ? (totalFraud / totalTransactions) * 100 : 0;
+    await mongoClient.close();
     
     console.log(`✅ Kaggle data loading completed!`);
-    console.log(`📊 Total: ${totalTransactions} transactions, ${totalFraud} fraud (${fraudRate.toFixed(2)}%)`);
+    console.log(`📊 Loaded: ${totalUsers} users, ${totalCards} cards, ${totalTransactions.toLocaleString()} transactions`);
     
     return res.json({
       success: true,
-      message: `Successfully loaded Kaggle fraud transaction data`,
+      message: `Successfully loaded Kaggle credit card transaction data`,
       stats: {
-        filesProcessed: loadedFiles,
+        filesProcessed: files.length,
+        totalUsers,
+        totalCards,
         totalTransactions,
-        fraudTransactions: totalFraud,
-        fraudRate: Math.round(fraudRate * 100) / 100
+        databases: ['MongoDB', 'Elasticsearch']
       }
     });
     
@@ -537,7 +725,10 @@ router.post('/load-kaggle-data', async (req, res) => {
   // Run MongoDB test operations with real transaction data
   async function runMongoDBTest(testData: any[], userId: string, testType: string, io?: Server) {
     const results = [];
-    const collection = mongoClient.db('showdown_benchmark').collection('transactions');
+    const db = mongoClient.db('showdown_benchmark');
+    const transactionsCollection = db.collection('transactions');
+    const cardsCollection = db.collection('cards');
+    const usersCollection = db.collection('users');
     
     for (let i = 0; i < testData.length; i++) {
       const startTime = Date.now();
@@ -557,40 +748,24 @@ router.post('/load-kaggle-data', async (req, res) => {
       }
       
       try {
-        // Randomly select operation type for variety
-        const operationType = i % 5;
+        // Rotate between 3 simple operations
+        const operationType = i % 3;
         
         switch (operationType) {
           case 0:
-            operationName = 'Find fraud transactions';
-            await collection.find({ isFraud: true }).limit(10).toArray();
+            operationName = 'Get all transactions';
+            // Get a batch of transactions with limit to avoid memory issues
+            await transactionsCollection.find({}).limit(100).toArray();
             break;
           case 1:
-            operationName = 'Aggregate by transaction type';
-            await collection.aggregate([
-              { $group: { _id: '$type', count: { $sum: 1 }, avgAmount: { $avg: '$amount' } } }
+            operationName = 'Calculate sum of all transactions';
+            await transactionsCollection.aggregate([
+              { $group: { _id: null, totalAmount: { $sum: '$amount' }, count: { $sum: 1 } } }
             ]).toArray();
             break;
           case 2:
-            operationName = 'Find high-value transactions';
-            await collection.find({ 
-              amount: { $gte: 10000 },
-              isFraud: false
-            }).limit(20).toArray();
-            break;
-          case 3:
-            operationName = 'Search by customer';
-            const randomCustomers = await collection.distinct('nameOrig', { type: 'TRANSFER' });
-            if (randomCustomers.length > 0) {
-              const randomCustomer = randomCustomers[Math.floor(Math.random() * Math.min(randomCustomers.length, 100))];
-              await collection.find({ nameOrig: randomCustomer }).limit(5).toArray();
-            }
-            break;
-          case 4:
-            operationName = 'Time-based analysis';
-            await collection.find({
-              step: { $gte: 100, $lte: 200 }
-            }).limit(15).toArray();
+            operationName = 'Find largest transaction';
+            await transactionsCollection.find({}).sort({ amount: -1 }).limit(1).toArray();
             break;
         }
         
@@ -645,7 +820,6 @@ router.post('/load-kaggle-data', async (req, res) => {
   // Run Elasticsearch test operations with real transaction data
   async function runElasticsearchTest(testData: any[], userId: string, testType: string, io?: Server) {
     const results = [];
-    const indexName = 'transactions';
     
     for (let i = 0; i < testData.length; i++) {
       const startTime = Date.now();
@@ -665,80 +839,41 @@ router.post('/load-kaggle-data', async (req, res) => {
       }
       
       try {
-        // Randomly select operation type for variety
-        const operationType = i % 5;
+        // Simplified operations - just 3 simple queries
+        const operationType = i % 3;
         
         switch (operationType) {
           case 0:
-            operationName = 'Search fraud transactions';
+            operationName = 'Get all transactions';
             await elasticsearchClient.search({
-              index: indexName,
+              index: 'transactions',
               body: {
-                query: { term: { isFraud: true } },
-                size: 10
+                query: { match_all: {} },
+                size: 100
               }
             });
             break;
           case 1:
-            operationName = 'Aggregate by transaction type';
+            operationName = 'Calculate sum of all transactions';
             await elasticsearchClient.search({
-              index: indexName,
+              index: 'transactions',
               body: {
                 size: 0,
                 aggs: {
-                  transaction_types: {
-                    terms: { field: 'type' },
-                    aggs: {
-                      avg_amount: { avg: { field: 'amount' } }
-                    }
-                  }
+                  total_amount: { sum: { field: 'amount' } },
+                  count: { value_count: { field: 'amount' } }
                 }
               }
             });
             break;
           case 2:
-            operationName = 'Range query high-value transactions';
+            operationName = 'Find largest transaction';
             await elasticsearchClient.search({
-              index: indexName,
+              index: 'transactions',
               body: {
-                query: {
-                  bool: {
-                    must: [
-                      { range: { amount: { gte: 10000 } } },
-                      { term: { isFraud: false } }
-                    ]
-                  }
-                },
-                size: 20
-              }
-            });
-            break;
-          case 3:
-            operationName = 'Search customer pattern';
-            await elasticsearchClient.search({
-              index: indexName,
-              body: {
-                query: {
-                  bool: {
-                    must: [
-                      { wildcard: { nameOrig: 'C*' } },
-                      { term: { type: 'TRANSFER' } }
-                    ]
-                  }
-                },
-                size: 5
-              }
-            });
-            break;
-          case 4:
-            operationName = 'Time-based search';
-            await elasticsearchClient.search({
-              index: indexName,
-              body: {
-                query: {
-                  range: { step: { gte: 100, lte: 200 } }
-                },
-                size: 15
+                query: { match_all: {} },
+                sort: [{ amount: { order: 'desc' } }],
+                size: 1
               }
             });
             break;
@@ -873,76 +1008,163 @@ router.get('/transaction/stats', async (req, res) => {
     await mongoClient.connect();
     
     const db = mongoClient.db('showdown_benchmark');
-    const collection = db.collection('transactions');
+    const transactionsCollection = db.collection('transactions');
+    const cardsCollection = db.collection('cards');
+    const usersCollection = db.collection('users');
     
     // Get comprehensive transaction statistics
-    const stats = await collection.aggregate([
+    const stats = await transactionsCollection.aggregate([
       {
         $group: {
           _id: null,
           totalTransactions: { $sum: 1 },
-          fraudTransactions: { $sum: { $cond: ['$isFraud', 1, 0] } },
           totalAmount: { $sum: '$amount' },
           avgAmount: { $avg: '$amount' },
           maxAmount: { $max: '$amount' },
-          minAmount: { $min: '$amount' }
+          minAmount: { $min: '$amount' },
+          chipTransactions: { $sum: { $cond: ['$use_chip', 1, 0] } }
         }
       }
     ]).toArray();
     
-    // Get transaction type distribution
-    const typeStats = await collection.aggregate([
+    // Get merchant city distribution (top 10)
+    const cityStats = await transactionsCollection.aggregate([
       {
         $group: {
-          _id: '$type',
+          _id: '$merchant_city',
           count: { $sum: 1 },
-          avgAmount: { $avg: '$amount' },
-          fraudCount: { $sum: { $cond: ['$isFraud', 1, 0] } }
-        }
-      }
-    ]).toArray();
-    
-    // Get hourly distribution
-    const hourlyStats = await collection.aggregate([
-      {
-        $group: {
-          _id: '$hourOfDay',
-          count: { $sum: 1 },
-          fraudCount: { $sum: { $cond: ['$isFraud', 1, 0] } }
+          totalAmount: { $sum: '$amount' },
+          avgAmount: { $avg: '$amount' }
         }
       },
-      { $sort: { _id: 1 } }
+      { $sort: { count: -1 } },
+      { $limit: 10 }
     ]).toArray();
+    
+    // Get merchant state distribution
+    const stateStats = await transactionsCollection.aggregate([
+      {
+        $group: {
+          _id: '$merchant_state',
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$amount' }
+        }
+      },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]).toArray();
+    
+    // Get MCC distribution (top merchant categories)
+    const mccStats = await transactionsCollection.aggregate([
+      {
+        $group: {
+          _id: '$mcc',
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$amount' },
+          avgAmount: { $avg: '$amount' }
+        }
+      },
+      { $sort: { totalAmount: -1 } },
+      { $limit: 10 }
+    ]).toArray();
+    
+    // Get card brand distribution by joining with cards collection
+    const cardBrandStats = await transactionsCollection.aggregate([
+      {
+        $lookup: {
+          from: 'cards',
+          localField: 'card_id',
+          foreignField: 'id',
+          as: 'card'
+        }
+      },
+      { $unwind: '$card' },
+      {
+        $group: {
+          _id: '$card.card_brand',
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$amount' },
+          avgAmount: { $avg: '$amount' }
+        }
+      },
+      { $sort: { totalAmount: -1 } }
+    ]).toArray();
+    
+    // Get chip vs swipe statistics
+    const chipStats = await transactionsCollection.aggregate([
+      {
+        $group: {
+          _id: '$use_chip',
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$amount' },
+          avgAmount: { $avg: '$amount' }
+        }
+      }
+    ]).toArray();
+    
+    // Count unique entities
+    const uniqueClients = await transactionsCollection.distinct('client_id');
+    const uniqueCards = await transactionsCollection.distinct('card_id');
+    const uniqueMerchants = await transactionsCollection.distinct('merchant_id');
     
     await mongoClient.close();
     
-    const mainStats = stats[0];
-    const fraudRate = (mainStats.fraudTransactions / mainStats.totalTransactions) * 100;
+    const mainStats = stats[0] || {
+      totalTransactions: 0,
+      totalAmount: 0,
+      avgAmount: 0,
+      maxAmount: 0,
+      minAmount: 0,
+      chipTransactions: 0
+    };
+    
+    const chipRate = mainStats.totalTransactions > 0 
+      ? (mainStats.chipTransactions / mainStats.totalTransactions) * 100 
+      : 0;
     
     return res.json({
       success: true,
       stats: {
         overview: {
           totalTransactions: mainStats.totalTransactions,
-          fraudTransactions: mainStats.fraudTransactions,
-          fraudRate: Math.round(fraudRate * 100) / 100,
           totalAmount: Math.round(mainStats.totalAmount * 100) / 100,
           avgAmount: Math.round(mainStats.avgAmount * 100) / 100,
           maxAmount: Math.round(mainStats.maxAmount * 100) / 100,
-          minAmount: Math.round(mainStats.minAmount * 100) / 100
+          minAmount: Math.round(mainStats.minAmount * 100) / 100,
+          chipTransactions: mainStats.chipTransactions,
+          chipRate: Math.round(chipRate * 100) / 100,
+          uniqueClients: uniqueClients.length,
+          uniqueCards: uniqueCards.length,
+          uniqueMerchants: uniqueMerchants.length
         },
-        byType: typeStats.map(type => ({
-          type: type._id,
-          count: type.count,
-          avgAmount: Math.round(type.avgAmount * 100) / 100,
-          fraudCount: type.fraudCount,
-          fraudRate: Math.round((type.fraudCount / type.count) * 10000) / 100
+        byCity: cityStats.map(city => ({
+          city: city._id || 'Unknown',
+          count: city.count,
+          totalAmount: Math.round(city.totalAmount * 100) / 100,
+          avgAmount: Math.round(city.avgAmount * 100) / 100
         })),
-        byHour: hourlyStats.map(hour => ({
-          hour: hour._id,
-          count: hour.count,
-          fraudCount: hour.fraudCount,
-          fraudRate: Math.round((hour.fraudCount / hour.count) * 10000) / 100
+        byState: stateStats.map(state => ({
+          state: state._id || 'Unknown',
+          count: state.count,
+          totalAmount: Math.round(state.totalAmount * 100) / 100
+        })),
+        byMCC: mccStats.map(mcc => ({
+          mcc: mcc._id || 'Unknown',
+          count: mcc.count,
+          totalAmount: Math.round(mcc.totalAmount * 100) / 100,
+          avgAmount: Math.round(mcc.avgAmount * 100) / 100
+        })),
+        byCardBrand: cardBrandStats.map(brand => ({
+          brand: brand._id || 'Unknown',
+          count: brand.count,
+          totalAmount: Math.round(brand.totalAmount * 100) / 100,
+          avgAmount: Math.round(brand.avgAmount * 100) / 100
+        })),
+        chipVsSwipe: chipStats.map(chip => ({
+          type: chip._id ? 'Chip' : 'Swipe',
+          count: chip.count,
+          totalAmount: Math.round(chip.totalAmount * 100) / 100,
+          avgAmount: Math.round(chip.avgAmount * 100) / 100
         }))
       }
     });

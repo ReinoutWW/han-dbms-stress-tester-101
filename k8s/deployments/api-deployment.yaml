@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: api
-        image: nosql-showdown-api:leaderboard-fix-v1.0.1
+        image: nosql-showdown-api:v1.1.0
         imagePullPolicy: Never  # For local development
         ports:
         - containerPort: 3000

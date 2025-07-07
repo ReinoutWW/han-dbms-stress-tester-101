@@ -9,6 +9,10 @@ const router = Router();
  */
 router.get('/data-status', async (req: Request, res: Response) => {
   try {
+    const { MongoClient } = require('mongodb');
+    const { Client: ElasticsearchClient } = require('@elastic/elasticsearch');
+    const { config } = require('../config');
+    
     const status = {
       mongodb: {
         connected: false,
@@ -22,10 +26,52 @@ router.get('/data-status', async (req: Request, res: Response) => {
       }
     };
 
-    // Simple status response for now
+    // Check MongoDB
+    try {
+      const mongoClient = new MongoClient(config.databases.mongodb.url);
+      await mongoClient.connect();
+      const db = mongoClient.db('showdown_benchmark');
+      
+      const collections = ['users', 'cards', 'transactions'];
+      for (const collName of collections) {
+        const count = await db.collection(collName).countDocuments();
+        status.mongodb.collections[collName] = count;
+        status.mongodb.totalRecords += count;
+      }
+      
+      status.mongodb.connected = true;
+      await mongoClient.close();
+    } catch (error) {
+      console.error('MongoDB status check failed:', error);
+    }
+
+    // Check Elasticsearch
+    try {
+      const elasticsearchClient = new ElasticsearchClient({
+        node: config.databases.elasticsearch.url
+      });
+      
+      await elasticsearchClient.ping();
+      status.elasticsearch.connected = true;
+      
+      const indices = ['users', 'cards', 'transactions'];
+      for (const indexName of indices) {
+        try {
+          const countResult = await elasticsearchClient.count({ index: indexName });
+          status.elasticsearch.indices[indexName] = countResult.count;
+          status.elasticsearch.totalRecords += countResult.count;
+        } catch (error) {
+          status.elasticsearch.indices[indexName] = 0;
+        }
+      }
+    } catch (error) {
+      console.error('Elasticsearch status check failed:', error);
+    }
+
     res.json({
       success: true,
       status: status,
+      dataLoaded: status.mongodb.totalRecords > 0 || status.elasticsearch.totalRecords > 0,
       timestamp: new Date().toISOString()
     });
 
@@ -78,28 +124,58 @@ router.get('/pi-info', async (req: Request, res: Response) => {
 });
 
 /**
- * Simple data loading endpoint (placeholder)
+ * Data loading endpoint - loads Kaggle dataset
  * POST /api/admin/load-data
  */
 router.post('/load-data', async (req: Request, res: Response) => {
   try {
+    const axios = require('axios');
     const { 
       databases = ['mongodb', 'elasticsearch'], 
-      batchSize = 500,
+      batchSize = 10000, // Increased for better performance
       dataPath = '/data/kaggle-finance'
     } = req.body;
 
-    // For now, return a placeholder response
-    res.json({
-      success: true,
-      message: 'Data loading endpoint ready (implementation pending)',
-      databases: databases,
-      batchSize: batchSize,
-      dataPath: dataPath,
-      timestamp: new Date().toISOString()
+    // Get the socket.io instance if available
+    const io = req.app.get('io');
+    
+    // Emit loading started event
+    if (io) {
+      io.emit('data:loading:started', {
+        databases,
+        batchSize,
+        dataPath,
+        timestamp: Date.now()
+      });
+    }
+
+    // Call the actual Kaggle data loading endpoint
+    const baseUrl = `http://localhost:${process.env.PORT || 3000}`;
+    const response = await axios.post(`${baseUrl}/api/stress-test/load-kaggle-data`, {
+      batchSize,
+      dataPath
     });
 
+    // Emit loading completed event
+    if (io && response.data.success) {
+      io.emit('data:loading:completed', {
+        stats: response.data.stats,
+        timestamp: Date.now()
+      });
+    }
+
+    res.json(response.data);
+
   } catch (error: any) {
+    // Emit loading error event
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('data:loading:error', {
+        error: error.message,
+        timestamp: Date.now()
+      });
+    }
+
     res.status(500).json({
       error: error.message,
       success: false,

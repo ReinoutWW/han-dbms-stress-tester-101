@@ -43,6 +43,9 @@ COPY --from=build /app/package*.json ./
 COPY --from=build /app/prisma ./prisma
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 
+# Copy scripts directory
+COPY scripts ./scripts
+
 # Create data directory and copy Kaggle dataset
 RUN mkdir -p /data/kaggle-finance
 COPY data/kaggle-finance/*.csv /data/kaggle-finance/
