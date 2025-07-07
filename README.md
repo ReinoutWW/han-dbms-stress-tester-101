@@ -419,14 +419,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Kubernetes Community** - Excellent documentation
 - **MongoDB & Elastic** - Database technologies
 - **All Contributors** - Making this project better
-
-## 📞 Contact
-
-For questions or support:
-- 📧 Email: your.email@example.com
-- 💬 Discord: [Join our server](https://discord.gg/example)
-- 🐦 Twitter: [@yourhandle](https://twitter.com/yourhandle)
-
 ---
 
 <div align="center">
