@@ -204,7 +204,7 @@ export default function BattleButton({
       </motion.button>
 
       {/* Battle Instructions */}
-      <div className="text-center text-xs sm:text-sm lg:text-base text-slate-600 max-w-sm sm:max-w-md lg:max-w-lg px-4">
+      <div className="text-center text-xs sm:text-sm lg:text-base text-slate-600 max-w-sm sm:max-w-md lg:max-w-lg px-2 sm:px-4">
         {disabled ? (
           <span>🔒 Register first to join the battle!</span>
         ) : isLoading ? (

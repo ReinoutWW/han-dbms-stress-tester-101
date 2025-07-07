@@ -137,7 +137,7 @@ export default function BattleResults({ results }: BattleResultsProps) {
       </div>
 
       {/* Detailed Comparison */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {/* MongoDB Stats */}
         <motion.div
           initial={{ x: -20, opacity: 0 }}
@@ -157,11 +157,11 @@ export default function BattleResults({ results }: BattleResultsProps) {
 
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-slate-600 flex items-center">
-                <Clock className="h-4 w-4 mr-2" />
+              <span className="text-sm sm:text-base text-slate-600 flex items-center">
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Avg Response
               </span>
-              <span className="text-slate-800 font-bold">{mongodb.avgResponseTime}ms</span>
+              <span className="text-sm sm:text-base text-slate-800 font-bold">{mongodb.avgResponseTime}ms</span>
             </div>
             
             <div className="flex justify-between items-center">
@@ -169,7 +169,7 @@ export default function BattleResults({ results }: BattleResultsProps) {
                 <Zap className="h-4 w-4 mr-2" />
                 Ops/Second
               </span>
-              <span className="text-slate-800 font-bold">{mongodb.opsPerSecond}</span>
+              <span className="text-sm sm:text-base text-slate-800 font-bold">{mongodb.opsPerSecond}</span>
             </div>
             
             <div className="flex justify-between items-center">
@@ -177,7 +177,7 @@ export default function BattleResults({ results }: BattleResultsProps) {
                 <Target className="h-4 w-4 mr-2" />
                 Success Rate
               </span>
-              <span className="text-slate-800 font-bold">{mongodb.successRate}%</span>
+              <span className="text-sm sm:text-base text-slate-800 font-bold">{mongodb.successRate}%</span>
             </div>
             
             <div className="flex justify-between items-center">
@@ -185,7 +185,7 @@ export default function BattleResults({ results }: BattleResultsProps) {
                 <Shield className="h-4 w-4 mr-2" />
                 P95 Latency
               </span>
-              <span className="text-slate-800 font-bold">{mongodb.p95ResponseTime}ms</span>
+              <span className="text-sm sm:text-base text-slate-800 font-bold">{mongodb.p95ResponseTime}ms</span>
             </div>
           </div>
 
@@ -215,11 +215,11 @@ export default function BattleResults({ results }: BattleResultsProps) {
 
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-slate-600 flex items-center">
-                <Clock className="h-4 w-4 mr-2" />
+              <span className="text-sm sm:text-base text-slate-600 flex items-center">
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 Avg Response
               </span>
-              <span className="text-slate-800 font-bold">{elasticsearch.avgResponseTime}ms</span>
+              <span className="text-sm sm:text-base text-slate-800 font-bold">{elasticsearch.avgResponseTime}ms</span>
             </div>
             
             <div className="flex justify-between items-center">
@@ -227,7 +227,7 @@ export default function BattleResults({ results }: BattleResultsProps) {
                 <Zap className="h-4 w-4 mr-2" />
                 Ops/Second
               </span>
-              <span className="text-slate-800 font-bold">{elasticsearch.opsPerSecond}</span>
+              <span className="text-sm sm:text-base text-slate-800 font-bold">{elasticsearch.opsPerSecond}</span>
             </div>
             
             <div className="flex justify-between items-center">
@@ -235,7 +235,7 @@ export default function BattleResults({ results }: BattleResultsProps) {
                 <Target className="h-4 w-4 mr-2" />
                 Success Rate
               </span>
-              <span className="text-slate-800 font-bold">{elasticsearch.successRate}%</span>
+              <span className="text-sm sm:text-base text-slate-800 font-bold">{elasticsearch.successRate}%</span>
             </div>
             
             <div className="flex justify-between items-center">
@@ -243,7 +243,7 @@ export default function BattleResults({ results }: BattleResultsProps) {
                 <Shield className="h-4 w-4 mr-2" />
                 P95 Latency
               </span>
-              <span className="text-slate-800 font-bold">{elasticsearch.p95ResponseTime}ms</span>
+              <span className="text-sm sm:text-base text-slate-800 font-bold">{elasticsearch.p95ResponseTime}ms</span>
             </div>
           </div>
 
@@ -267,7 +267,7 @@ export default function BattleResults({ results }: BattleResultsProps) {
           Performance Breakdown
         </h3>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           <div className="space-y-3">
             <h4 className="text-sm font-medium text-slate-700">Response Time Comparison</h4>
             <div className="space-y-2">

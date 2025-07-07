@@ -97,18 +97,18 @@ function AppContent() {
         />
 
         {/* Main Layout with Sidebar */}
-        <div className="flex-1 flex">
+        <div className="flex-1 flex min-w-0">
           {/* Main Content Area */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col min-w-0">
             {/* Tab Navigation */}
             <motion.nav 
               initial={{ y: -20, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ delay: 0.3, duration: 0.4 }}
-              className="glass-card mx-4 mt-4 max-w-6xl mx-auto"
+              className="glass-card mx-4 mt-4 max-w-6xl lg:mx-auto"
             >
               <div className="px-4 sm:px-6 lg:px-8">
-                <div className="flex space-x-8">
+                <div className="flex space-x-2 sm:space-x-4 lg:space-x-8 overflow-x-auto">
                   {tabs.map((tab, index) => {
                     const Icon = tab.icon;
                     const isActive = activeTab === tab.id;
@@ -122,8 +122,8 @@ function AppContent() {
                         onClick={() => setActiveTab(tab.id)}
                         className={`
                           relative flex items-center space-x-3 
-                          px-6 py-4 font-medium text-sm
-                          transition-all duration-200 border-b-2 group
+                          px-3 sm:px-4 lg:px-6 py-3 sm:py-4 font-medium text-sm
+                          transition-all duration-200 border-b-2 group flex-shrink-0
                           ${isActive 
                             ? 'text-han-700 border-han-600 bg-han-100/50' 
                             : 'text-slate-700 border-transparent hover:text-slate-900 hover:border-slate-400'
@@ -133,7 +133,7 @@ function AppContent() {
                         <Icon className={`h-5 w-5 transition-transform duration-200 ${isActive ? 'scale-105' : 'group-hover:scale-105'}`} />
                         <div className="text-left">
                           <div className="font-semibold">{tab.label}</div>
-                          <div className="text-xs opacity-70">{tab.description}</div>
+                          <div className="text-xs opacity-70 hidden sm:block">{tab.description}</div>
                         </div>
                         
                         {/* Active indicator */}
@@ -157,7 +157,7 @@ function AppContent() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className="flex-1 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8"
+              className="flex-1 max-w-6xl w-full lg:mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8"
             >
               {activeTab === 'stress-test' && <Dashboard currentUser={currentUser} />}
               {activeTab === 'leaderboard' && <Leaderboard />}

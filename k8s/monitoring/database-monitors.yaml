@@ -1,0 +1,139 @@
+---
+# MongoDB Exporter Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-exporter
+  namespace: databases
+  labels:
+    app: mongodb-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb-exporter
+  template:
+    metadata:
+      labels:
+        app: mongodb-exporter
+    spec:
+      containers:
+      - name: mongodb-exporter
+        image: percona/mongodb_exporter:0.40
+        args:
+        - --mongodb.uri=mongodb://admin:mongodb_pass_2024@mongodb:27017/admin?authSource=admin
+        - --web.listen-address=:9216
+        ports:
+        - containerPort: 9216
+          name: metrics
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "400m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-exporter
+  namespace: databases
+  labels:
+    app: mongodb-exporter
+spec:
+  ports:
+  - port: 9216
+    targetPort: 9216
+    name: metrics
+  selector:
+    app: mongodb-exporter
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mongodb-monitor
+  namespace: observability
+  labels:
+    app: mongodb
+    release: kube-prom-stack
+spec:
+  namespaceSelector:
+    matchNames:
+    - databases
+  selector:
+    matchLabels:
+      app: mongodb-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s
+---
+# Elasticsearch Exporter Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch-exporter
+  namespace: databases
+  labels:
+    app: elasticsearch-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch-exporter
+  template:
+    metadata:
+      labels:
+        app: elasticsearch-exporter
+    spec:
+      containers:
+      - name: elasticsearch-exporter
+        image: quay.io/prometheuscommunity/elasticsearch-exporter:v1.7.0
+        args:
+        - --es.uri=http://elasticsearch:9200
+        - --es.all
+        - --es.indices
+        ports:
+        - containerPort: 9114
+          name: metrics
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "400m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-exporter
+  namespace: databases
+  labels:
+    app: elasticsearch-exporter
+spec:
+  ports:
+  - port: 9114
+    targetPort: 9114
+    name: metrics
+  selector:
+    app: elasticsearch-exporter
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: elasticsearch-monitor
+  namespace: observability
+  labels:
+    app: elasticsearch
+    release: kube-prom-stack
+spec:
+  namespaceSelector:
+    matchNames:
+    - databases
+  selector:
+    matchLabels:
+      app: elasticsearch-exporter
+  endpoints:
+  - port: metrics
+    interval: 30s

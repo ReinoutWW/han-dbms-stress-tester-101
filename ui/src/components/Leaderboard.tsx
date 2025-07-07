@@ -124,13 +124,13 @@ export default function Leaderboard() {
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
-        return <Crown className="h-7 w-7 text-yellow-400" />;
+        return <Crown className="h-5 w-5 sm:h-7 sm:w-7 text-yellow-400" />;
       case 2:
-        return <Medal className="h-7 w-7 text-slate-400" />;
+        return <Medal className="h-5 w-5 sm:h-7 sm:w-7 text-slate-400" />;
       case 3:
-        return <Award className="h-7 w-7 text-amber-600" />;
+        return <Award className="h-5 w-5 sm:h-7 sm:w-7 text-amber-600" />;
       default:
-        return <span className="text-xl font-bold text-slate-500">#{rank}</span>;
+        return <span className="text-base sm:text-xl font-bold text-slate-500">#{rank}</span>;
     }
   };
 

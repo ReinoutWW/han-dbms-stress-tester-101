@@ -120,8 +120,15 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       toast.loading('🚀 Initializing stress test...', { id: 'stress-test' });
     },
     onSuccess: (data) => {
-      // Socket.io events handle the UI updates, but we still need to store the result
-      setLastTestResult(data.stats);
+      // Add a small delay to ensure Socket.io events are properly synchronized
+      setTimeout(() => {
+        setLastTestResult(data.stats);
+        // If we haven't received Socket.io events after the delay, manually update the UI
+        if (testProgress.mongodb === 0 && testProgress.elasticsearch === 0) {
+          setTestProgress({ mongodb: 100, elasticsearch: 100 });
+          setIsRunningTest(false);
+        }
+      }, 500); // 500ms delay to allow Socket.io events to arrive
       // Note: Socket.io handles loading state, toasts, and query invalidation
     },
     onError: (error: any) => {
@@ -155,41 +162,41 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="glass-card p-8"
+        className="glass-card p-4 sm:p-6 lg:p-8"
       >
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 sm:mb-8">
           <motion.div
             animate={isRunningTest ? { rotate: [0, 360] } : {}}
             transition={{ duration: 2, repeat: isRunningTest ? Infinity : 0, ease: "linear" }}
-            className="w-16 h-16 bg-gradient-to-br from-han-500 to-han-700 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg"
+            className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-han-500 to-han-700 rounded-2xl flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg"
           >
-            <Activity className="h-8 w-8 text-white" />
+            <Activity className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
           </motion.div>
-          <h2 className="text-2xl font-display font-bold text-slate-800 mb-2">
+          <h2 className="text-xl sm:text-2xl font-display font-bold text-slate-800 mb-2">
             Database Performance Test
           </h2>
-          <p className="text-slate-600">
+          <p className="text-sm sm:text-base text-slate-600">
             Run a comprehensive stress test against MongoDB and Elasticsearch
           </p>
         </div>
 
         {/* Single Stress Test Button */}
-        <div className="flex justify-center mb-8">
+        <div className="flex justify-center mb-6 sm:mb-8">
           <motion.button
             onClick={handleStressTest}
             disabled={!currentUser || isRunningTest}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="px-12 py-4 bg-gradient-to-r from-han-500 to-han-700 hover:from-han-600 hover:to-han-800 text-white font-bold text-lg rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-3 shadow-lg transform hover:-translate-y-1"
+            className="px-8 sm:px-12 py-3 sm:py-4 bg-gradient-to-r from-han-500 to-han-700 hover:from-han-600 hover:to-han-800 text-white font-bold text-base sm:text-lg rounded-2xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 sm:space-x-3 shadow-lg transform hover:-translate-y-1"
           >
             {isRunningTest ? (
               <>
-                <Loader2 className="h-6 w-6 animate-spin" />
+                <Loader2 className="h-5 w-5 sm:h-6 sm:w-6 animate-spin" />
                 <span>Running Test...</span>
               </>
             ) : (
               <>
-                <Play className="h-6 w-6" />
+                <Play className="h-5 w-5 sm:h-6 sm:w-6" />
                 <span>Stress Test! Go!</span>
               </>
             )}
@@ -197,23 +204,23 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         </div>
 
         {/* Test Configuration Display */}
-        <div className="text-center text-sm text-slate-500 mb-8">
+        <div className="text-center text-xs sm:text-sm text-slate-500 mb-6 sm:mb-8">
           <p>Test Configuration: 25 operations, 2 concurrent threads</p>
           <p>Optimized for balanced performance comparison</p>
         </div>
 
         {/* Live Battle Visualization */}
-        <div className="bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+        <div className="bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl p-4 sm:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 items-center">
             {/* MongoDB */}
             <motion.div 
-              className="text-center p-6 bg-white/50 backdrop-blur-sm border border-mongodb-500/20 rounded-2xl"
+              className="text-center p-4 sm:p-6 bg-white/50 backdrop-blur-sm border border-mongodb-500/20 rounded-2xl"
               animate={isRunningTest ? { scale: [1, 1.02, 1] } : {}}
               transition={{ duration: 1, repeat: isRunningTest ? Infinity : 0 }}
             >
-              <div className="text-4xl mb-3">🍃</div>
-              <h3 className="text-lg font-semibold text-mongodb-600 mb-2">MongoDB</h3>
-              <div className="text-xs text-slate-500 mb-3">Document Database</div>
+              <div className="text-3xl sm:text-4xl mb-2 sm:mb-3">🍃</div>
+              <h3 className="text-base sm:text-lg font-semibold text-mongodb-600 mb-1 sm:mb-2">MongoDB</h3>
+              <div className="text-xs text-slate-500 mb-2 sm:mb-3">Document Database</div>
               {isRunningTest ? (
                 <div className="w-full">
                   <div className="text-sm font-medium text-mongodb-600 mb-2">Testing...</div>
@@ -227,7 +234,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                 </div>
               ) : lastTestResult ? (
                 <div>
-                  <div className="text-xl font-bold text-slate-800">{lastTestResult.mongodb.avgResponseTime}ms</div>
+                  <div className="text-lg sm:text-xl font-bold text-slate-800">{lastTestResult.mongodb.avgResponseTime}ms</div>
                   <div className="text-xs text-slate-500">Average Response</div>
                 </div>
               ) : null}
@@ -238,11 +245,11 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               <motion.div
                 animate={isRunningTest ? { rotate: 360 } : {}}
                 transition={{ duration: 3, repeat: isRunningTest ? Infinity : 0, ease: "linear" }}
-                className="text-3xl mb-2"
+                className="text-2xl sm:text-3xl mb-1 sm:mb-2"
               >
                 ⚡
               </motion.div>
-              <div className="text-xl font-display font-bold text-han-600">VS</div>
+              <div className="text-lg sm:text-xl font-display font-bold text-han-600">VS</div>
               {isRunningTest && (
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -256,13 +263,13 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
             {/* Elasticsearch */}
             <motion.div 
-              className="text-center p-6 bg-white/50 backdrop-blur-sm border border-elasticsearch-500/20 rounded-2xl"
+              className="text-center p-4 sm:p-6 bg-white/50 backdrop-blur-sm border border-elasticsearch-500/20 rounded-2xl"
               animate={isRunningTest ? { scale: [1, 1.02, 1] } : {}}
               transition={{ duration: 1, repeat: isRunningTest ? Infinity : 0, delay: 0.3 }}
             >
-              <div className="text-4xl mb-3">🔍</div>
-              <h3 className="text-lg font-semibold text-elasticsearch-600 mb-2">Elasticsearch</h3>
-              <div className="text-xs text-slate-500 mb-3">Search Engine</div>
+              <div className="text-3xl sm:text-4xl mb-2 sm:mb-3">🔍</div>
+              <h3 className="text-base sm:text-lg font-semibold text-elasticsearch-600 mb-1 sm:mb-2">Elasticsearch</h3>
+              <div className="text-xs text-slate-500 mb-2 sm:mb-3">Search Engine</div>
               {isRunningTest ? (
                 <div className="w-full">
                   <div className="text-sm font-medium text-elasticsearch-600 mb-2">Testing...</div>
@@ -276,7 +283,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                 </div>
               ) : lastTestResult ? (
                 <div>
-                  <div className="text-xl font-bold text-slate-800">{lastTestResult.elasticsearch.avgResponseTime}ms</div>
+                  <div className="text-lg sm:text-xl font-bold text-slate-800">{lastTestResult.elasticsearch.avgResponseTime}ms</div>
                   <div className="text-xs text-slate-500">Average Response</div>
                 </div>
               ) : null}

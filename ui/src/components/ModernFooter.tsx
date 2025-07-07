@@ -7,7 +7,7 @@ export default function ModernFooter() {
       initial={{ y: 50, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ delay: 0.8, duration: 0.4 }}
-      className="relative mt-auto glass-card m-4 mx-auto max-w-7xl"
+      className="relative mt-auto glass-card m-2 sm:m-4"
     >
       <div className="absolute inset-0 opacity-5 rounded-3xl overflow-hidden">
         <div className="w-full h-full bg-gradient-to-r from-han-500/20 via-transparent to-mongodb-500/20"></div>

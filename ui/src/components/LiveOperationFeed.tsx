@@ -131,11 +131,11 @@ export default function LiveOperationFeed({ currentUser, isVisible }: LiveOperat
       <motion.div
         initial={{ opacity: 0, height: 0 }}
         animate={{ opacity: 1, height: 'auto' }}
-        className="glass-card p-6 text-center"
+        className="glass-card p-4 sm:p-6 text-center"
       >
-        <Activity className="h-12 w-12 mx-auto mb-3 text-slate-400" />
-        <h3 className="text-lg font-semibold text-slate-800 mb-2">Live Operation Feed</h3>
-        <p className="text-slate-600">Start a stress test to see real-time database operations</p>
+        <Activity className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-2 sm:mb-3 text-slate-400" />
+        <h3 className="text-base sm:text-lg font-semibold text-slate-800 mb-2">Live Operation Feed</h3>
+        <p className="text-sm sm:text-base text-slate-600">Start a stress test to see real-time database operations</p>
       </motion.div>
     );
   }
@@ -144,24 +144,24 @@ export default function LiveOperationFeed({ currentUser, isVisible }: LiveOperat
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass-card p-6"
+      className="glass-card p-4 sm:p-6"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-han-500 to-han-700 rounded-xl flex items-center justify-center">
-            <Zap className="h-5 w-5 text-white" />
+          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-han-500 to-han-700 rounded-lg sm:rounded-xl flex items-center justify-center">
+            <Zap className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-slate-800">Live Operations</h3>
-            <p className="text-sm text-slate-600">Real-time database operation results</p>
+            <h3 className="text-base sm:text-lg font-semibold text-slate-800">Live Operations</h3>
+            <p className="text-xs sm:text-sm text-slate-600">Real-time database operation results</p>
           </div>
         </div>
         
         <div className="flex items-center space-x-2">
-          <div className="w-3 h-3 bg-status-online rounded-full animate-status-pulse"></div>
-          <span className="text-sm text-status-online font-medium">LIVE</span>
-          <div className="text-sm text-slate-600 ml-3">
+          <div className="w-2 h-2 sm:w-3 sm:h-3 bg-status-online rounded-full animate-status-pulse"></div>
+          <span className="text-xs sm:text-sm text-status-online font-medium">LIVE</span>
+          <div className="text-xs sm:text-sm text-slate-600 ml-2 sm:ml-3">
             {operations.length} ops
           </div>
         </div>
@@ -171,7 +171,7 @@ export default function LiveOperationFeed({ currentUser, isVisible }: LiveOperat
       <div 
         ref={scrollRef}
         onScroll={handleScroll}
-        className="h-64 overflow-y-auto space-y-2 pr-2"
+        className="h-48 sm:h-64 overflow-y-auto space-y-1 sm:space-y-2 pr-1 sm:pr-2"
         style={{ scrollbarWidth: 'thin' }}
       >
         <AnimatePresence initial={false}>
@@ -182,7 +182,7 @@ export default function LiveOperationFeed({ currentUser, isVisible }: LiveOperat
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 20, scale: 0.95 }}
               transition={{ duration: 0.3, delay: index * 0.02 }}
-              className={`flex items-center justify-between p-3 rounded-xl border ${getDatabaseColor(operation.database)} backdrop-blur-sm`}
+              className={`flex items-center justify-between p-2 sm:p-3 rounded-lg sm:rounded-xl border ${getDatabaseColor(operation.database)} backdrop-blur-sm`}
             >
               <div className="flex items-center space-x-3 flex-1">
                 {/* Database Icon */}
@@ -192,23 +192,23 @@ export default function LiveOperationFeed({ currentUser, isVisible }: LiveOperat
                 
                 {/* Operation Info */}
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs font-medium text-slate-800">
+                  <div className="flex items-center space-x-1 sm:space-x-2">
+                    <span className="text-2xs sm:text-xs font-medium text-slate-800">
                       #{operation.operationNumber}
                     </span>
-                    <span className="text-xs text-slate-600 truncate">
+                    <span className="text-2xs sm:text-xs text-slate-600 truncate">
                       {operation.operationName}
                     </span>
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-2xs sm:text-xs text-slate-500">
                     {operation.database.toLowerCase()}
                   </div>
                 </div>
                 
                 {/* Response Time */}
-                <div className="flex items-center space-x-2 flex-shrink-0">
-                  <Clock className="h-3 w-3 text-slate-400" />
-                  <span className={`text-xs font-semibold ${getResponseTimeColor(operation.responseTime)}`}>
+                <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
+                  <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-slate-400" />
+                  <span className={`text-2xs sm:text-xs font-semibold ${getResponseTimeColor(operation.responseTime)}`}>
                     {operation.responseTime}ms
                   </span>
                 </div>
@@ -249,25 +249,25 @@ export default function LiveOperationFeed({ currentUser, isVisible }: LiveOperat
       )}
 
       {/* Statistics */}
-      <div className="mt-4 pt-4 border-t border-slate-300/50">
-        <div className="grid grid-cols-3 gap-4 text-center">
+      <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-300/50">
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 text-center">
           <div>
-            <div className="text-lg font-bold text-mongodb-600">
+            <div className="text-base sm:text-lg font-bold text-mongodb-600">
               {operations.filter(op => op.database === 'MONGODB').length}
             </div>
-            <div className="text-xs text-slate-600">MongoDB</div>
+            <div className="text-2xs sm:text-xs text-slate-600">MongoDB</div>
           </div>
           <div>
-            <div className="text-lg font-bold text-elasticsearch-600">
+            <div className="text-base sm:text-lg font-bold text-elasticsearch-600">
               {operations.filter(op => op.database === 'ELASTICSEARCH').length}
             </div>
-            <div className="text-xs text-slate-600">Elasticsearch</div>
+            <div className="text-2xs sm:text-xs text-slate-600">Elasticsearch</div>
           </div>
           <div>
-            <div className="text-lg font-bold text-green-600">
+            <div className="text-base sm:text-lg font-bold text-green-600">
               {operations.filter(op => op.success).length}
             </div>
-            <div className="text-xs text-slate-600">Successful</div>
+            <div className="text-2xs sm:text-xs text-slate-600">Successful</div>
           </div>
         </div>
       </div>

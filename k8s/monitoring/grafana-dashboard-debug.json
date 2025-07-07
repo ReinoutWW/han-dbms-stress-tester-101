@@ -1,0 +1,111 @@
+{
+  "dashboard": {
+    "title": "NoSQL Debug - Find Correct Metrics",
+    "panels": [
+      {
+        "id": 1,
+        "title": "All MongoDB Metrics",
+        "type": "table",
+        "gridPos": {"h": 10, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "{__name__=~\"mongodb.*\"}",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "MongoDB Connections Test",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 10},
+        "targets": [
+          {
+            "expr": "mongodb_ss_connections",
+            "legendFormat": "{{conn_type}} - {{instance}}",
+            "refId": "A"
+          },
+          {
+            "expr": "mongodb_connections_current",
+            "legendFormat": "current (alt) - {{instance}}",
+            "refId": "B"
+          },
+          {
+            "expr": "mongodb_connections_active",
+            "legendFormat": "active - {{instance}}",
+            "refId": "C"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "MongoDB Operations Test",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 10},
+        "targets": [
+          {
+            "expr": "rate(mongodb_ss_opcounters[5m])",
+            "legendFormat": "{{legacy_op_type}}",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(mongodb_opcounters_total[5m])",
+            "legendFormat": "{{type}} (alt)",
+            "refId": "B"
+          },
+          {
+            "expr": "irate(mongodb_ss_opcounters_tot[5m])",
+            "legendFormat": "{{legacy_op_type}} (tot)",
+            "refId": "C"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "MongoDB Memory Test",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 18},
+        "targets": [
+          {
+            "expr": "mongodb_ss_mem_resident",
+            "legendFormat": "Resident MB",
+            "refId": "A"
+          },
+          {
+            "expr": "mongodb_ss_mem_virtual", 
+            "legendFormat": "Virtual MB",
+            "refId": "B"
+          },
+          {
+            "expr": "mongodb_memory_resident",
+            "legendFormat": "Resident (alt)",
+            "refId": "C"
+          },
+          {
+            "expr": "mongodb_ss_wt_cache_bytes",
+            "legendFormat": "WT Cache bytes",
+            "refId": "D"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "All Elasticsearch Metrics",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 18},
+        "targets": [
+          {
+            "expr": "{__name__=~\"elasticsearch.*\"}",
+            "format": "table",
+            "instant": true,
+            "refId": "A"
+          }
+        ]
+      }
+    ],
+    "refresh": "5s",
+    "time": {"from": "now-15m", "to": "now"}
+  }
+}
