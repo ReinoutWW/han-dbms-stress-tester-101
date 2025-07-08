@@ -118,6 +118,230 @@ sequenceDiagram
     React UI-->>Student: Show Real-time Results
 ```
 
+
+```mermaid
+---
+config:
+  theme: default
+  layout: fixed
+---
+flowchart TB
+ subgraph Internet["🌍 Internet Access"]
+        Students["👥 Students<br>(Browsers/Mobile)"]
+        OAuth["🔐 Google OAuth<br>(Netherlands Only)"]
+  end
+ subgraph ngrok["🔗 ngrok Tunnels (Geographic Restrictions)"]
+    direction TB
+        NGK1["🇳🇱 showdown-XXX.ngrok.io<br>(Geo-blocked + OAuth)"]
+        NGK2["🇳🇱 api-XXX.ngrok.io<br>(Rate Limited)"]
+        NGK3["🇳🇱 grafana-XXX.ngrok.io<br>(Monitoring)"]
+        NGK4["🇳🇱 kibana-XXX.ngrok.io<br>(Elasticsearch UI)"]
+  end
+ subgraph Network["🌐 Network Hardware"]
+        FortiGate["🛡️ FortiGate 50G<br>10.0.1.1/24<br>(Router/L3/NAT)"]
+        UniFiSwitch["🔀 UniFi Lite 8 PoE<br>(L2 Switch)<br>8× Gigabit Ports"]
+        AdminLaptop["💻 Admin Laptop<br>10.0.1.50<br>(ngrok host)"]
+  end
+ subgraph Compute["🖥️ Compute Cluster"]
+        Pi1["🥧 fractal1<br>Pi 5 8 GB<br>10.0.1.3<br>Control Plane"]
+        Pi2["🥧 fractal2<br>Pi 5 8 GB<br>10.0.1.4<br>Worker"]
+        Pi3["🥧 fractal3<br>Pi 5 4 GB<br>10.0.1.5<br>Worker"]
+        Pi4["🥧 fractal4<br>Pi 5 4 GB<br>10.0.1.6<br>Worker"]
+        Pi5["🥧 fractal5<br>Pi 5 4 GB<br>10.0.1.7<br>Worker"]
+        Pi6["🥧 fractal6<br>Pi 5 4 GB<br>10.0.1.8<br>Worker"]
+  end
+ subgraph Storage["💾 Storage"]
+        SD1["64 GB MicroSD<br>(fractal1)"]
+        SD2["64 GB MicroSD<br>(fractal2)"]
+        SD3["64 GB MicroSD<br>(fractal3)"]
+        SD4["64 GB MicroSD<br>(fractal4)"]
+        SD5["64 GB MicroSD<br>(fractal5)"]
+        SD6["64 GB MicroSD<br>(fractal6)"]
+  end
+ subgraph Hardware["🏗️ Physical Hardware Infrastructure"]
+    direction TB
+        Network
+        Compute
+        Storage
+  end
+ subgraph MetalLB["⚖️ MetalLB LoadBalancer Pool (10.0.1.240-250)"]
+    direction TB
+        LB1["🎨 React UI<br>10.0.1.243:80"]
+        LB2["🔧 Node.js API<br>10.0.1.244:3000"]
+        LB3["📊 Grafana<br>10.0.1.245:3000"]
+        LB4["🔍 Kibana<br>10.0.1.242:5601"]
+        LB5["📈 Prometheus<br>10.0.1.246:9090"]
+        LB6["🎛️ K8s Dashboard<br>10.0.1.240:443"]
+        LB7["🗃️ MongoDB Express<br>10.0.1.247:8081"]
+        LB8["⚡ Elasticsearch<br>10.0.1.241:9200"]
+  end
+ subgraph ControlPlane["🎯 Control Plane (fractal1)"]
+        APIServer["kube-apiserver"]
+        ETCD["etcd"]
+        Scheduler["kube-scheduler"]
+        Controller["kube-controller"]
+        CP_ANCHOR(("anchor"))
+  end
+ subgraph Applications["📱 Application Pods"]
+        ReactApp["React Frontend<br>(Socket.io Client)"]
+        NodeAPI["Node.js API<br>(Express + Socket.io)"]
+        UserManagement["User Management<br>(Authentication)"]
+  end
+ subgraph MongoDB["🍃 MongoDB Replica Set"]
+        MongoPrimary["Primary<br>(fractal1)"]
+        MongoSecondary1["Secondary<br>(fractal2)"]
+        MongoSecondary2["Secondary<br>(fractal3)"]
+  end
+ subgraph Elasticsearch["🔍 Elasticsearch Cluster"]
+        ESMaster["Master<br>(fractal2)"]
+        ESData1["Data Node<br>(fractal4)"]
+        ESData2["Data Node<br>(fractal5)"]
+        ESData3["Data Node<br>(fractal6)"]
+  end
+ subgraph PostgreSQL["🐘 PostgreSQL"]
+        Postgres["User Data<br>(fractal1)"]
+  end
+ subgraph Databases["🗄️ Database Layer"]
+        MongoDB
+        Elasticsearch
+        PostgreSQL
+  end
+ subgraph Exporters["📡 Metric Exporters"]
+        NodeExporter["Node Exporter<br>(All Nodes)"]
+        MongoExporter["MongoDB Exporter"]
+        ESExporter["ES Exporter"]
+  end
+ subgraph Monitoring["📊 Monitoring Stack"]
+        Prometheus["Prometheus<br>(Metrics Collection)"]
+        Grafana["Grafana<br>(Dashboards)"]
+        Kibana["Kibana<br>(ES Visualization)"]
+        Exporters
+  end
+ subgraph NetworkPolicy["🔐 Network Policies"]
+        CoreDNS["CoreDNS<br>(Service Discovery)"]
+        Flannel["Flannel CNI<br>(Pod Network)"]
+        MetalLBSpeaker["MetalLB Speaker<br>(Load Balancing)"]
+  end
+ subgraph K8s["☸️ Kubernetes Cluster (MicroK8s)"]
+    direction TB
+        ControlPlane
+        Applications
+        Databases
+        Monitoring
+        NetworkPolicy
+        K8S_ANCHOR(("anchor"))
+  end
+    Pi1 -. Boot .-> SD1
+    Pi2 -. Boot .-> SD2
+    Pi3 -. Boot .-> SD3
+    Pi4 -. Boot .-> SD4
+    Pi5 -. Boot .-> SD5
+    Pi6 -. Boot .-> SD6
+    FortiGate -- Gigabit --- UniFiSwitch
+    UniFiSwitch -- Cat6 --- Pi1 & Pi2 & Pi3 & Pi4 & Pi5 & Pi6 & AdminLaptop
+    Students --> OAuth
+    OAuth --> NGK1 & NGK2 & NGK3 & NGK4
+    NGK1 --> AdminLaptop
+    NGK2 --> AdminLaptop
+    NGK3 --> AdminLaptop
+    NGK4 --> AdminLaptop
+    AdminLaptop --> FortiGate
+    FortiGate --> UniFiSwitch
+    UniFiSwitch --> LB1 & LB2 & LB3 & LB4 & LB5 & LB6 & LB7 & LB8
+    LB1 --> ReactApp
+    LB2 --> NodeAPI
+    LB3 --> Grafana
+    LB4 --> Kibana
+    LB5 --> Prometheus
+    LB6 --> APIServer
+    LB7 --> MongoPrimary
+    LB8 --> ESMaster
+    ReactApp -. WebSocket .-> NodeAPI
+    NodeAPI --> UserManagement & Postgres & MongoPrimary & ESMaster & Prometheus
+    MongoPrimary -. Replica .-> MongoSecondary1 & MongoSecondary2
+    ESMaster -. Cluster .-> ESData1 & ESData2 & ESData3
+    NodeExporter --> Prometheus
+    MongoExporter --> Prometheus
+    ESExporter --> Prometheus
+    Prometheus --> Grafana
+    ESMaster --> Kibana
+    Grafana -. Dashboard Updates .-> ReactApp
+    NodeAPI -. Metrics .-> ReactApp
+    APIServer -. Control .-> CP_ANCHOR
+    ETCD -. State .-> APIServer
+    Scheduler -. Pod Placement .-> Pi1 & Pi2 & Pi3 & Pi4 & Pi5 & Pi6
+    CoreDNS -. DNS .-> K8S_ANCHOR
+    Flannel -. CNI .-> K8S_ANCHOR
+    MetalLBSpeaker -. ARP .-> FortiGate
+     Students:::external
+     OAuth:::external
+     NGK1:::external
+     NGK2:::external
+     NGK3:::external
+     NGK4:::external
+     FortiGate:::network
+     UniFiSwitch:::network
+     AdminLaptop:::network
+     Pi1:::hardware
+     Pi2:::hardware
+     Pi3:::hardware
+     Pi4:::hardware
+     Pi5:::hardware
+     Pi6:::hardware
+     SD1:::storage
+     SD2:::storage
+     SD3:::storage
+     SD4:::storage
+     SD5:::storage
+     SD6:::storage
+     LB1:::loadbalancer
+     LB2:::loadbalancer
+     LB3:::loadbalancer
+     LB4:::loadbalancer
+     LB5:::loadbalancer
+     LB6:::loadbalancer
+     LB7:::loadbalancer
+     LB8:::loadbalancer
+     APIServer:::k8s
+     ETCD:::k8s
+     Scheduler:::k8s
+     Controller:::k8s
+     CP_ANCHOR:::anchor
+     ReactApp:::app
+     NodeAPI:::app
+     UserManagement:::app
+     MongoPrimary:::database
+     MongoSecondary1:::database
+     MongoSecondary2:::database
+     ESMaster:::database
+     ESData1:::database
+     ESData2:::database
+     ESData3:::database
+     Postgres:::database
+     NodeExporter:::monitor
+     MongoExporter:::monitor
+     ESExporter:::monitor
+     Prometheus:::monitor
+     Grafana:::monitor
+     Kibana:::monitor
+     CoreDNS:::k8s
+     Flannel:::k8s
+     MetalLBSpeaker:::k8s
+     K8S_ANCHOR:::anchor
+    classDef external     fill:#e1f5fe,stroke:#0277bd,stroke-width:2px
+    classDef hardware     fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef network      fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef loadbalancer fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef app          fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef database     fill:#fff8e1,stroke:#f9a825,stroke-width:2px
+    classDef monitor      fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef k8s          fill:#f1f8e9,stroke:#689f38,stroke-width:2px
+    classDef storage      fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef anchor       fill:transparent,stroke:none,color:transparent
+
+
+```
+
 ## 🛠️ Technology Stack
 
 ### Frontend
