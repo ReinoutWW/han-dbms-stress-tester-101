@@ -123,7 +123,7 @@ sequenceDiagram
 ---
 config:
   theme: default
-  layout: fixed
+  layout: elk
 ---
 flowchart TB
  subgraph Internet["🌍 Internet Access"]
